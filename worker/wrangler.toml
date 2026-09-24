@@ -9,7 +9,7 @@ CORS_ORIGIN = "https://santtu-seppanen.github.io"
 [[d1_databases]]
 binding = "DB"
 database_name = "rt-reclamator-db"
-database_id = "TAYTA_TAMA_WRANGLER_D1_CREATE_KOMENNON_TULOSTEESTA"
+database_id = "32f53af6-350c-42c5-a9a8-b890306c77cf"
 
 [[r2_buckets]]
 binding = "KUVAT"
