@@ -1,0 +1,20 @@
+name = "rt-reclamator-analysoi"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+workers_dev = true
+
+[vars]
+CORS_ORIGIN = "https://santtu-seppanen.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rt-reclamator-db"
+database_id = "TAYTA_TAMA_WRANGLER_D1_CREATE_KOMENNON_TULOSTEESTA"
+
+[[r2_buckets]]
+binding = "KUVAT"
+bucket_name = "rt-reclamator-kuvat"
+
+# Salaisuudet (eivät tässä tiedostossa, eivät koskaan gitissä):
+#   wrangler secret put JAETTU_SALASANA
+#   wrangler secret put ANTHROPIC_API_KEY

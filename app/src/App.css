@@ -1,0 +1,446 @@
+:root {
+  --vari-tausta-ylhaalta: #eef1f4;
+  --vari-tausta-alhaalta: #dfe4e9;
+  --vari-tausta: #ffffff;
+  --vari-pinta: rgba(255, 255, 255, 0.82);
+  --vari-reuna: rgba(28, 39, 51, 0.14);
+  --vari-teksti: #1c2733;
+  --vari-teksti-himmea: #5b6b7a;
+  --vari-ensisijainen: #d9720c;
+  --vari-ensisijainen-tumma: #a3540a;
+  --vari-aksentti: #1f5c8b;
+  --vari-halytys-tausta: #fff4d6;
+  --vari-halytys-reuna: #f2b705;
+  --vari-halytys-teksti: #6b4e00;
+  --vari-virhe: #c0392b;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(180deg, var(--vari-tausta-ylhaalta) 0%, var(--vari-tausta-alhaalta) 100%);
+  background-attachment: fixed;
+  color: var(--vari-teksti);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sovellus {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1rem;
+  padding-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.otsikko {
+  text-align: center;
+  padding: 0.5rem 0 0;
+}
+
+.otsikko h1 {
+  margin: 0;
+  font-size: clamp(1.9rem, 6vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  background: linear-gradient(120deg, var(--vari-ensisijainen-tumma), var(--vari-aksentti));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.alaotsikko {
+  margin: 0.35rem 0 0;
+  color: var(--vari-teksti-himmea);
+  font-size: 1rem;
+}
+
+.otsikko-napit {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.otsikko-linkki {
+  margin-top: 0;
+  padding: 0.4rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--vari-ensisijainen-tumma);
+  background: var(--vari-pinta);
+  border: 1px solid var(--vari-reuna);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.otsikko-linkki:active {
+  background: var(--vari-reuna);
+}
+
+.halytysbanneri {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  background: var(--vari-halytys-tausta);
+  border: 1px solid var(--vari-halytys-reuna);
+  color: var(--vari-halytys-teksti);
+  border-radius: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(242, 183, 5, 0.25);
+}
+
+.kentta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.kentan-nimi {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--vari-teksti-himmea);
+}
+
+.kentan-vihje {
+  font-size: 0.8rem;
+  color: var(--vari-teksti-himmea);
+}
+
+.teksti-syote {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem 0.8rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid var(--vari-reuna);
+  border-radius: 0.6rem;
+  background: var(--vari-tausta);
+  color: var(--vari-teksti);
+  resize: vertical;
+}
+
+.teksti-syote:focus {
+  outline: 2px solid var(--vari-ensisijainen);
+  outline-offset: 1px;
+}
+
+.nappi {
+  min-height: 44px;
+  padding: 0.75rem 1.4rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.nappi:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.nappi-ensisijainen {
+  width: 100%;
+  background: linear-gradient(120deg, var(--vari-ensisijainen), var(--vari-ensisijainen-tumma));
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(163, 84, 10, 0.28);
+}
+
+.nappi-ensisijainen:not(:disabled):active {
+  background: var(--vari-ensisijainen-tumma);
+  transform: scale(0.98);
+}
+
+.nappi-toissijainen {
+  background: var(--vari-tausta);
+  color: var(--vari-teksti);
+  border: 1px solid var(--vari-reuna);
+}
+
+.nappi-toissijainen:not(:disabled):active {
+  background: var(--vari-reuna);
+}
+
+.tyhja-tila {
+  color: var(--vari-teksti-himmea);
+  font-style: italic;
+}
+
+.lomake-virhe {
+  margin: 0;
+  color: var(--vari-virhe);
+  font-weight: 600;
+}
+
+.analyysi-lomake-kontti,
+.tulos-kortti,
+.historia-osio {
+  background: var(--vari-pinta);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--vari-reuna);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 10px 24px rgba(28, 39, 51, 0.08);
+}
+
+.analyysi-lomake-kontti h2,
+.tulos-kortti h2,
+.historia-osio h2 {
+  margin: 0;
+}
+
+.analyysi-ohje {
+  margin: 0;
+  color: var(--vari-teksti);
+}
+
+.kuva-valinta-napit {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.kuva-valinta-nappi {
+  flex: 1;
+  width: auto;
+  height: 3rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tiedostosyote-piilotettu {
+  display: none;
+}
+
+.kuva-esikatselu {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 0.75rem;
+  border: 1px solid var(--vari-reuna);
+}
+
+.gps-nappi {
+  align-self: flex-start;
+}
+
+.sulje-nappi {
+  align-self: flex-end;
+}
+
+/* Analyysin tulos (havainto + RT-korttiehdotukset), käytetään sekä juuri
+   lähetetyn kuvan tuloksessa että historian avatussa rivissä. */
+.ehdotus-lista-kontti {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.havainto {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ehdotus-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.ehdotus-kortti {
+  border: 1px solid var(--vari-reuna);
+  border-left-width: 4px;
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--vari-tausta);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.ehdotus-varmuus-korkea {
+  border-left-color: #1f7a3f;
+}
+
+.ehdotus-varmuus-keskitaso {
+  border-left-color: var(--vari-halytys-reuna);
+}
+
+.ehdotus-varmuus-matala {
+  border-left-color: var(--vari-teksti-himmea);
+}
+
+.ehdotus-otsikkorivi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.6rem;
+}
+
+.ehdotus-aihe {
+  font-weight: 700;
+}
+
+.ehdotus-koodi {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--vari-aksentti);
+}
+
+.ehdotus-kuvaus {
+  margin: 0;
+  color: var(--vari-teksti);
+}
+
+.ehdotus-varmuus-teksti {
+  font-size: 0.8rem;
+  color: var(--vari-teksti-himmea);
+}
+
+.ehdotus-vastuuvapaus {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--vari-teksti-himmea);
+}
+
+.ehdotus-vastuuvapaus a {
+  color: var(--vari-aksentti);
+}
+
+.historia-suodatin {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--vari-teksti-himmea);
+}
+
+.historia-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.historia-rivi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.historia-avaa {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--vari-reuna);
+  border-radius: 0.75rem;
+  background: var(--vari-tausta);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.historia-pikkukuva {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+}
+
+.historia-tiedot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.historia-tekija {
+  font-weight: 700;
+}
+
+.historia-aika {
+  font-size: 0.85rem;
+  color: var(--vari-teksti-himmea);
+}
+
+/*
+ * Natiivi <dialog>, joten selaimen omat oletustyylit (reunus, taustaväri,
+ * koko) täytyy nollata ennen kuin oma flex-kohdistus pääsee vaikuttamaan.
+ * showModal() renderöi elementin "top layeriin", joten sen ei tarvitse
+ * itse huolehtia vierityslukosta tai näppäimistön väistämisestä — selain
+ * hoitaa sen.
+ */
+.modaali-tausta {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: none;
+  padding: 1rem;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.modaali-tausta::backdrop {
+  background: rgba(20, 15, 8, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.modaali-sisalto {
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 640px) {
+  .modaali-tausta {
+    align-items: center;
+  }
+}
+
+@media (min-width: 640px) {
+  .sovellus {
+    padding: 2rem 1rem;
+  }
+
+  .nappi-ensisijainen {
+    width: auto;
+    align-self: flex-start;
+  }
+}
