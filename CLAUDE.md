@@ -1,33 +1,38 @@
 # RT Reclamator
 
 Sovellus, jolla kuvaa remontti- tai rakennuskohteen puhelimella ja saa
-heti ehdotuksen siihen sopivista Rakennustiedon RT-kortiston
-(https://kortistot.rakennustieto.fi/kortistot/rt-kortisto) korteista.
+heti ehdotuksen mahdollisista rakennusvirheistä sekä niihin liittyvistä
+Rakennustiedon RT-kortiston
+(https://kortistot.rakennustieto.fi/kortistot/rt-kortisto) kohdista ja
+Suomen lainsäädännön pykälistä, joihin reklamaatiossa voi vedota.
 RT-kortisto sisältää satoja ohjekortteja rakentamisen eri osa-alueilta:
 rakennusosat, talotekniikka, pintarakenteet, korjausrakentaminen,
 työmaakäytännöt jne. — sovelluksen ydin on auttaa hahmottamaan nopeasti,
-minkä aihepiirin kortteja kannattaa lähteä etsimään kuvassa näkyvän työn
-perusteella.
+mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
 
 - Etusivu (`app/src/features/analyysi/Etusivu.tsx`) on kuvan
   ottamista/lähetystä varten: kamerakuva tai galleriasta valittu kuva
   (`KuvaKentta.tsx`), vapaaehtoinen lisätieto tekstikenttänä, tekijän
   nimimerkki ja vapaaehtoinen sijainti (kertahaku, ei jatkuvaa seurantaa
   — ks. Konventiot). Lähetys menee Workerin `POST /analysoi`-reittiin,
-  joka pyytää RT-korttiehdotukset Anthropic-API:sta (Claude, kuvantulkinta)
-  ja palauttaa ne heti — käyttäjä näkee tuloksen ilman erillistä hakua.
-- **Ehdotukset ovat tekoälyn arvioita, ei kortiston suora haku.** Worker ei
-  hae RT-kortistoa reaaliaikaisesti — malli antaa tarkan korttitunnuksen
-  vain jos se on siitä kohtuullisen varma, muuten pelkän aihepiirin
-  sanallisesti ja rehellisen matalan varmuuden (ks.
+  joka pyytää virhe-/reklamaatioehdotukset Anthropic-API:sta (Claude,
+  kuvantulkinta) ja palauttaa ne heti — käyttäjä näkee tuloksen ilman
+  erillistä hakua.
+- **Ehdotukset ovat tekoälyn arvioita, eivät kortiston suora haku eikä
+  lakineuvontaa.** Worker ei hae RT-kortistoa reaaliaikaisesti eikä
+  mallilla ole lakimieskoulutusta — malli antaa tarkan korttitunnuksen tai
+  lakipykälän vain jos se on siitä kohtuullisen varma, muuten pelkän
+  aihepiirin/lakialueen sanallisesti ja rehellisen matalan varmuuden (ks.
   `worker/src/rtAnalyysi.ts`:n `SYSTEEMIKEHOTE`). Frontend näyttää tämän
   aina käyttäjälle (`EhdotusLista.tsx`:n vastuuvapauslauseke + linkki
-  itse kortistoon) — älä koskaan esitä ehdotuksia varmoina fakta-korttien
-  numeroina.
+  itse kortistoon ja kehotus varmistaa lakipykälät asiantuntijalta) — älä
+  koskaan esitä ehdotuksia varmoina fakta-korttien numeroina tai sitovana
+  lakineuvontana.
 - Historianäkymä (header → "Historia", `Historia.tsx`) listaa kaikki
   aiemmin lähetetyt kuvat (`GET /analyysit`), suodatettavissa "vain omat
   kuvani" -valinnalla samalla laitekohtaisella nimimerkkimuistilla kuin
-  lähetyslomake. Rivin avaaminen näyttää sen RT-ehdotukset uudelleen.
+  lähetyslomake. Rivin avaaminen näyttää sen virhe-/reklamaatioehdotukset
+  uudelleen.
 - Sijainti (lat/lng) tallennetaan kuvan mukana **pelkkänä metatietona**
   (esim. mahdollista tulevaa "näytä kartalla" -näkymää varten) — sillä ei
   ole mitään vaikutusta siihen, näytetäänkö tai avautuuko jokin sisältö.

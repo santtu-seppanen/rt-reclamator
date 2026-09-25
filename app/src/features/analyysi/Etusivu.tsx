@@ -70,7 +70,7 @@ export function Etusivu() {
   if (tulos) {
     return (
       <div className="tulos-kortti">
-        <h2>RT-korttiehdotukset</h2>
+        <h2>Havaitut rakennusvirheet</h2>
         <EhdotusLista havainto={tulos.havainto} ehdotukset={tulos.ehdotukset} />
         <button type="button" className="nappi nappi-ensisijainen" onClick={aloitaAlusta}>
           Analysoi uusi kuva
@@ -83,8 +83,8 @@ export function Etusivu() {
     <form className="analyysi-lomake-kontti" onSubmit={lahetaKuva}>
       <h2>Kuvaa remonttikohde</h2>
       <p className="analyysi-ohje">
-        Ota kuva remontti- tai rakennuskohteesta, niin sovellus ehdottaa siihen sopivia
-        RT-kortteja.
+        Ota kuva remontti- tai rakennuskohteesta, niin sovellus etsii siitä mahdollisia
+        rakennusvirheitä ja ehdottaa RT-kortin kohtia sekä lakipykäliä reklamaation tueksi.
       </p>
 
       <KuvaKentta onValitse={setTiedosto} vihjeTeksti="Kuva pakataan automaattisesti ennen lähetystä." />

@@ -12,7 +12,8 @@ export function App() {
       <header className="otsikko">
         <h1>RT Reclamator</h1>
         <p className="alaotsikko">
-          Kuvaa remonttikohde, niin sovellus ehdottaa siihen sopivia RT-kortteja.
+          Kuvaa remonttikohde, niin sovellus etsii rakennusvirheitä ja ehdottaa RT-kortteja
+          sekä lakipykäliä reklamaation tueksi.
         </p>
         <div className="otsikko-napit">
           <button type="button" className="otsikko-linkki" onClick={() => setNaytaHistoria(true)}>

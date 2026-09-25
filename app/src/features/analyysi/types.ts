@@ -3,11 +3,12 @@ export type Varmuus = "korkea" | "keskitaso" | "matala";
 export interface RtEhdotus {
   aihe: string;
   rtKortti: string | null;
+  lakipykala: string | null;
   kuvaus: string;
   varmuus: Varmuus;
 }
 
-/** Yksi lähetetty remonttikuva ja siihen saadut RT-korttiehdotukset. */
+/** Yksi lähetetty kuva ja siihen saadut rakennusvirhe-/reklamaatioehdotukset. */
 export interface Analyysi {
   id: string;
   tekija: string;

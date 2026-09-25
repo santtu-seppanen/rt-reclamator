@@ -10,7 +10,7 @@ interface HistoriaProps {
 
 type Lataustila = "lataa" | "valmis" | "virhe";
 
-/** Aiemmin lähetettyjen kuvien historia — jokainen rivi avautuu näyttämään sen RT-korttiehdotukset. */
+/** Aiemmin lähetettyjen kuvien historia — jokainen rivi avautuu näyttämään sen rakennusvirhe-/reklamaatioehdotukset. */
 export function Historia({ onSulje }: HistoriaProps) {
   const [analyysit, setAnalyysit] = useState<Analyysi[]>([]);
   const [lataustila, setLataustila] = useState<Lataustila>("lataa");
