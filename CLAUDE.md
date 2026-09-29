@@ -17,7 +17,15 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   — ks. Konventiot). Lähetys menee Workerin `POST /analysoi`-reittiin,
   joka pyytää virhe-/reklamaatioehdotukset Anthropic-API:sta (Claude,
   kuvantulkinta) ja palauttaa ne heti — käyttäjä näkee tuloksen ilman
-  erillistä hakua.
+  erillistä hakua. Kesken analyysin malli voi itse kutsua kahta työkalua
+  (`worker/src/rtAnalyysi.ts`: `hae_rt_kortteja_hakemistosta`,
+  `hae_rt_kortin_sisalto`) tarkistaakseen oikean RT-kortin ennen
+  ehdotuksen kirjaamista — sekä nopea tunnus+nimi-hakemistohaku (D1) että
+  tarvittaessa koko kortin sisällön haku kortistosta ovat siis sallittuja
+  osana itse analyysiä, jos ne parantavat ehdotuksen laatua. Enintään 4
+  keskustelukierrosta per analyysi, viimeinen pakottaa lopullisen
+  vastauksen — pitää kokonaiskeston hallittuna vaikka malli käyttäisi
+  työkaluja.
 - **Ehdotukset (`POST /analysoi`) ovat tekoälyn arvioita kuvasta, eivät
   lakineuvontaa.** Mallilla ei ole lakimieskoulutusta — se antaa tarkan
   lakipykälän vain jos se on siitä kohtuullisen varma, muuten pelkän
@@ -25,10 +33,19 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   `worker/src/rtAnalyysi.ts`:n `SYSTEEMIKEHOTE`). Frontend näyttää tämän
   aina käyttäjälle (`EhdotusLista.tsx`:n vastuuvapauslauseke + kehotus
   varmistaa lakipykälät asiantuntijalta) — älä koskaan esitä ehdotuksia
-  sitovana lakineuvontana. RT-korttitunnuksen osalta `/analysoi` itse antaa
-  edelleen vain mallin arvion (ks. alla `GET /rt-kortti`, joka sen sijaan
-  hakee ja tiivistää oikean kortin sisällön, mutta jota `/analysoi` ei
-  automaattisesti kutsu ehdotusten vahvistamiseksi).
+  sitovana lakineuvontana. **RT-korttitunnus sen sijaan on aina joko
+  todellinen tai tyhjä, ei koskaan hallusinoitu:** mallia ohjeistetaan
+  käyttämään hakutyökaluja ennen tunnuksen ehdottamista (ks. yllä), ja
+  tämän lisäksi `/analysoi` tarkistaa lopullisenkin ehdotetun tunnuksen
+  vielä `rt_kortti_hakemisto`-taulua vasten (`varmistaRtKortit`
+  `index.ts`:ssä) ja tyhjentää sen jos vastaavaa korttia ei oikeasti ole
+  olemassa — kaksi kerrosta, joista jälkimmäinen on kova tekninen tae eikä
+  vain kehotteeseen luottamista (toimii vaikka malli unohtaisi käyttää
+  työkaluja). Lakipykälille
+  vastaavaa tarkistusta ei ole (ei ole olemassa vastaavaa konetestattavaa
+  lakikortistoa), joten niiden osalta luotetaan yhä pelkkään mallin omaan
+  matalan varmuuden ilmoittamiseen. `GET /rt-kortti` hakee ja tiivistää
+  oikean, jo-vahvistetun kortin koko sisällön käyttäjän pyynnöstä.
 - Historianäkymä (header → "Historia", `Historia.tsx`) listaa kaikki
   aiemmin lähetetyt kuvat (`GET /analyysit`), suodatettavissa "vain omat
   kuvani" -valinnalla samalla laitekohtaisella nimimerkkimuistilla kuin
@@ -97,6 +114,21 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     Anthropic-API:lta (`tiivistaRtKortti`) ja tallentaa tuloksen
     `rt_kortit`-tauluun ennen palautusta. 404 jos tunnusta ei löydy tai
     lisenssi ei kata sitä.
+  - `POST /rt-kortti-hakemisto/paivita?sivu=1&maara=20` — rakentaa/päivittää
+    `rt_kortti_hakemisto`-taulun (tunnus, otsikko, tyyppi, julkaistu,
+    content_id): kirjautuu ja hakee `maara` sivua laajalla `"*"`-haulla
+    (`rtKortisto.ts`:n `haeHakemistoSivu`), suodattaa RT-alkuiset tulokset ja
+    tallentaa ne. Koko kortisto on n. 70-115 hakutulossivua eikä yksi
+    Worker-kutsu voi tehdä rajattomasti alipyyntöjä, joten reitti on
+    sivutettu — kutsu uudelleen vastauksen `seuraavaSivu`-arvolla kunnes se
+    on `null`. **Tämän hakemiston tarkoitus:** `POST /analysoi` tarkistaa
+    jokaisen ehdotuksen `rtKortti`-tunnuksen tätä taulua vasten
+    (`varmistaRtKortit` `index.ts`:ssä) ja tyhjentää sen jos tunnusta ei
+    löydy — malli ei siis voi enää näyttää hallusinoitua RT-korttinumeroa
+    todellisena käyttäjälle, vaikka se itse "uskoisi" siihen. Aja tämä
+    hakemistopäivitys aina käyttöönoton yhteydessä (tyhjä hakemisto = kaikki
+    ehdotusten korttitunnukset tyhjenevät) ja satunnaisesti myöhemmin
+    kortiston sisällön muuttuessa — ei toistaiseksi ajastettu automaattisesti.
   - **Käyttöönotto (tekee käyttäjä itse, ei automatisoitu):**
     `cd worker && ./deploy.sh` (tai `npm run setup`) — yksi skripti joka
     hoitaa kirjautumisen, D1-tietokannan ja R2-kuvavaraston luonnin (jos

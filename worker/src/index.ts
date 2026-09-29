@@ -1,8 +1,18 @@
-import { haeKuvat, lisaaKuva, haeRtKortti, tallennaRtKortti } from "./d1.js";
+import {
+  haeKuvat,
+  lisaaKuva,
+  haeRtKortti,
+  tallennaRtKortti,
+  tallennaHakemistoRivit,
+  onkoRtKorttiHakemistossa,
+  hakemistonKoko,
+  hakemistohaku,
+} from "./d1.js";
 import { haeKuva, tallennaKuva } from "./r2.js";
 import { validoiAnalysoiPyynto } from "./validointi.js";
 import { analysoiRemontti } from "./rtAnalyysi.js";
-import { kirjaudu, haeKortinSisalto, tiivistaRtKortti } from "./rtKortisto.js";
+import type { RtEhdotus, RtAnalyysiTyokalut } from "./rtAnalyysi.js";
+import { kirjaudu, haeKortinSisalto, tiivistaRtKortti, haeHakemistoSivu } from "./rtKortisto.js";
 
 interface Env {
   DB: D1Database;
@@ -45,6 +55,10 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/rt-kortti") {
       return kasitteleRtKortti(request, url, env, corsHeaders);
+    }
+
+    if (request.method === "POST" && url.pathname === "/rt-kortti-hakemisto/paivita") {
+      return kasitteleHakemistonPaivitys(request, url, env, corsHeaders);
     }
 
     return jsonVastaus({ error: "Reittiä ei löydy" }, 404, corsHeaders);
@@ -100,13 +114,28 @@ async function kasitteleAnalysoi(
 
   const { pyynto } = tulos;
 
+  const tyokalut: RtAnalyysiTyokalut = {
+    haeHakemistosta: (hakusana) => hakemistohaku(env.DB, hakusana),
+    haeKortinTiivistelma: async (tunnus) => {
+      try {
+        const rivi = await haeTaiTiivistaKortti(env, tunnus.split(",")[0].trim());
+        return rivi?.tiivistelma ?? null;
+      } catch (virhe) {
+        console.error("hae_rt_kortin_sisalto epäonnistui:", virhe);
+        return null;
+      }
+    },
+  };
+
   let analyysi;
   try {
-    analyysi = await analysoiRemontti(env.ANTHROPIC_API_KEY, pyynto.kuva, pyynto.muistiinpano);
+    analyysi = await analysoiRemontti(env.ANTHROPIC_API_KEY, pyynto.kuva, pyynto.muistiinpano, tyokalut);
   } catch (virhe) {
     console.error(virhe);
     return jsonVastaus({ error: "RT-analyysi epäonnistui. Yritä uudelleen." }, 502, corsHeaders);
   }
+
+  analyysi = { ...analyysi, ehdotukset: await varmistaRtKortit(env.DB, analyysi.ehdotukset) };
 
   const id = crypto.randomUUID();
   const tiedostonimi = `${id}.${pyynto.kuva.tiedostopaate}`;
@@ -131,6 +160,99 @@ async function kasitteleAnalysoi(
 }
 
 /**
+ * Tarkistaa jokaisen ehdotuksen rtKortti-tunnuksen rt_kortti_hakemisto-taulua
+ * vasten (ks. GET /rt-kortti-hakemisto/paivita) ja tyhjentää sen jos tunnusta
+ * ei löydy oikeasta kortistosta — malli ei saa koskaan näyttää hallusinoitua
+ * RT-korttinumeroa todellisena. Malli saattaa liittää tunnukseen pilkulla
+ * erotetun kohdan (esim. "RT 84-11093, kohta 3.2"), joten vain pilkkua
+ * edeltävä osa tarkistetaan.
+ */
+async function varmistaRtKortit(db: D1Database, ehdotukset: RtEhdotus[]): Promise<RtEhdotus[]> {
+  return Promise.all(
+    ehdotukset.map(async (ehdotus) => {
+      if (!ehdotus.rtKortti) return ehdotus;
+      const ehdokasTunnus = ehdotus.rtKortti.split(",")[0].trim();
+      const loytyy = await onkoRtKorttiHakemistossa(db, ehdokasTunnus);
+      return loytyy ? ehdotus : { ...ehdotus, rtKortti: null };
+    }),
+  );
+}
+
+/**
+ * Hakee yhden sivullisen (oletus 20 hakutulossivua) koko RT-kortiston
+ * tunnus+nimi-metatietoja kortistosta ja tallentaa ne rt_kortti_hakemisto-
+ * tauluun. Sivutettu, koska koko kortisto on ~100+ hakutulossivua ja yksi
+ * Worker-kutsu voi tehdä vain rajallisen määrän alipyyntöjä — kutsu
+ * uudelleen palautetulla seuraavaSivu-arvolla kunnes se on null.
+ */
+async function kasitteleHakemistonPaivitys(
+  request: Request,
+  url: URL,
+  env: Env,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  if (request.headers.get("X-Jaettu-Salasana") !== env.JAETTU_SALASANA) {
+    return jsonVastaus({ error: "Virheellinen salasana" }, 401, corsHeaders);
+  }
+
+  const alkusivu = Math.max(1, Number(url.searchParams.get("sivu") ?? "1") || 1);
+  const maara = Math.min(25, Math.max(1, Number(url.searchParams.get("maara") ?? "20") || 20));
+
+  try {
+    const evasteet = await kirjaudu(env.RAKENNUSTIETO_USERNAME, env.RAKENNUSTIETO_PASSWORD);
+
+    let kasitellytSivut = 0;
+    let loytyneetKortit = 0;
+    let sivujaYhteensa = alkusivu;
+
+    for (let sivu = alkusivu; sivu < alkusivu + maara; sivu++) {
+      const hakemistoSivu = await haeHakemistoSivu(evasteet, sivu);
+      sivujaYhteensa = hakemistoSivu.sivujaYhteensa;
+      await tallennaHakemistoRivit(env.DB, hakemistoSivu.kortit);
+      loytyneetKortit += hakemistoSivu.kortit.length;
+      kasitellytSivut++;
+      if (sivu >= sivujaYhteensa) break;
+    }
+
+    const kasiteltySivuViimeeksi = alkusivu + kasitellytSivut - 1;
+    const seuraavaSivu = kasiteltySivuViimeeksi < sivujaYhteensa ? kasiteltySivuViimeeksi + 1 : null;
+
+    return jsonVastaus(
+      {
+        kasitellytSivut,
+        loytyneetKortit,
+        sivujaYhteensa,
+        seuraavaSivu,
+        hakemistonKokoYhteensa: await hakemistonKoko(env.DB),
+      },
+      200,
+      corsHeaders,
+    );
+  } catch (virhe) {
+    console.error(virhe);
+    return jsonVastaus({ error: "Hakemiston päivitys epäonnistui" }, 502, corsHeaders);
+  }
+}
+
+/**
+ * Hakee RT-kortin tiivistelmän tunnuksella — D1-välimuistista jos kortti on jo
+ * kerran haettu, muuten kirjautuu kortistoon, hakee PDF:n ja tiivistää sen
+ * Anthropic-API:lla ennen tallennusta. Jaettu sekä GET /rt-kortti -reitin
+ * että /analysoi:n hae_rt_kortin_sisalto-työkalun käyttöön (ks. rtAnalyysi.ts).
+ */
+async function haeTaiTiivistaKortti(env: Env, tunnus: string): Promise<{ otsikko: string; tiivistelma: string } | null> {
+  const valimuistista = await haeRtKortti(env.DB, tunnus);
+  if (valimuistista) return valimuistista;
+
+  const evasteet = await kirjaudu(env.RAKENNUSTIETO_USERNAME, env.RAKENNUSTIETO_PASSWORD);
+  const kortti = await haeKortinSisalto(evasteet, tunnus);
+  if (!kortti) return null;
+
+  const tiivistelma = await tiivistaRtKortti(env.ANTHROPIC_API_KEY, tunnus, kortti.otsikko, kortti.pdfTavut);
+  return tallennaRtKortti(env.DB, tunnus, kortti.otsikko, tiivistelma);
+}
+
+/**
  * Hakee yhden RT-kortin tiivistelmän tunnuksen perusteella (esim. "RT 85-11253").
  * Jos kortti on jo kerran haettu ja tiivistetty, palautetaan D1-välimuistista
  * eikä kortistot.rakennustieto.fi:tä eikä Anthropic-API:a kutsuta uudelleen.
@@ -150,20 +272,12 @@ async function kasitteleRtKortti(
     return jsonVastaus({ error: "tunnus-parametri on pakollinen" }, 400, corsHeaders);
   }
 
-  const valimuistista = await haeRtKortti(env.DB, tunnus);
-  if (valimuistista) {
-    return jsonVastaus(valimuistista, 200, corsHeaders);
-  }
-
   try {
-    const evasteet = await kirjaudu(env.RAKENNUSTIETO_USERNAME, env.RAKENNUSTIETO_PASSWORD);
-    const kortti = await haeKortinSisalto(evasteet, tunnus);
-    if (!kortti) {
+    const rivi = await haeTaiTiivistaKortti(env, tunnus);
+    if (!rivi) {
       return jsonVastaus({ error: "Korttia ei löytynyt tai ei lisenssiä sen sisältöön" }, 404, corsHeaders);
     }
-    const tiivistelma = await tiivistaRtKortti(env.ANTHROPIC_API_KEY, tunnus, kortti.otsikko, kortti.pdfTavut);
-    const rivi = await tallennaRtKortti(env.DB, tunnus, kortti.otsikko, tiivistelma);
-    return jsonVastaus(rivi, 201, corsHeaders);
+    return jsonVastaus(rivi, 200, corsHeaders);
   } catch (virhe) {
     console.error(virhe);
     return jsonVastaus({ error: "RT-kortin haku epäonnistui" }, 502, corsHeaders);

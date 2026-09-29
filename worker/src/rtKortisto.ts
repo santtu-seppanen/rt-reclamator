@@ -140,9 +140,16 @@ interface HakutulosKortti {
   CardReferenceCode?: string;
   ProductName?: string;
   contentId?: string | number;
+  ProductType?: string;
+  PublicationDate?: string;
 }
 
-function poimiHakudata(html: string): { products: HakutulosKortti[] } | null {
+interface Hakutulossivu {
+  products: HakutulosKortti[];
+  pagination: { total_count: number; pages_count: number; page: number };
+}
+
+function poimiHakudata(html: string): Hakutulossivu | null {
   for (const osuma of html.matchAll(NEXT_F_RE)) {
     const raaka = osuma[1];
     if (!raaka.includes("initialSearchData")) continue;
@@ -168,12 +175,58 @@ function poimiHakudata(html: string): { products: HakutulosKortti[] } | null {
     }
     if (loppu === -1) continue;
     try {
-      return JSON.parse(dekoodattu.slice(alku, loppu)) as { products: HakutulosKortti[] };
+      return JSON.parse(dekoodattu.slice(alku, loppu)) as Hakutulossivu;
     } catch {
       continue;
     }
   }
   return null;
+}
+
+async function haeHakutulossivu(evasteet: Evasteet, kysely: string, sivu: number): Promise<Hakutulossivu | null> {
+  const hakuUrl = `${BASE}/search?q=${encodeURIComponent(kysely)}&page=${sivu}`;
+  const { vastaus } = await seuraaUudelleenohjaukset(hakuUrl, evasteet, { method: "GET" });
+  return poimiHakudata(await vastaus.text());
+}
+
+export interface HakemistoKortti {
+  tunnus: string;
+  otsikko: string;
+  tyyppi: string | null;
+  julkaistu: string | null;
+  contentId: string | null;
+}
+
+export interface HakemistoSivu {
+  kortit: HakemistoKortti[];
+  sivu: number;
+  sivujaYhteensa: number;
+}
+
+/**
+ * Hakee yhden sivullisen koko kortiston hakutuloksia laajalla "*"-haulla ja
+ * suodattaa siitä RT-alkuiset kortit (haku kattaa myös Ratu/KH/RYL-kortit).
+ * Käytetään hakemiston rakentamiseen, jotta mallin ehdottamat RT-tunnukset
+ * voidaan tarkistaa oikeaa kortistoa vasten eikä koskaan näytetä
+ * hallusinoitua tunnusta todellisena.
+ */
+export async function haeHakemistoSivu(evasteet: Evasteet, sivu: number): Promise<HakemistoSivu> {
+  const data = await haeHakutulossivu(evasteet, "*", sivu);
+  if (!data) {
+    throw new Error("hakemistosivua ei voitu lukea - sivuston hakutulosrakenne on saattanut muuttua");
+  }
+  const kortit = data.products
+    .filter((p): p is HakutulosKortti & { CardReferenceCode: string } =>
+      (p.CardReferenceCode ?? "").startsWith("RT "),
+    )
+    .map((p) => ({
+      tunnus: p.CardReferenceCode,
+      otsikko: p.ProductName ?? p.CardReferenceCode,
+      tyyppi: p.ProductType ?? null,
+      julkaistu: p.PublicationDate ?? null,
+      contentId: p.contentId != null ? String(p.contentId) : null,
+    }));
+  return { kortit, sivu: data.pagination.page, sivujaYhteensa: data.pagination.pages_count };
 }
 
 export interface RtKortinSisalto {
@@ -183,10 +236,7 @@ export interface RtKortinSisalto {
 
 /** Hakee yhden kortin PDF-sisällön tunnuksen (esim. "RT 85-11253") perusteella. */
 export async function haeKortinSisalto(evasteet: Evasteet, tunnus: string): Promise<RtKortinSisalto | null> {
-  const hakuUrl = `${BASE}/search?q=${encodeURIComponent(tunnus)}&page=1`;
-  const { vastaus: hakuVastaus } = await seuraaUudelleenohjaukset(hakuUrl, evasteet, { method: "GET" });
-  const html = await hakuVastaus.text();
-  const data = poimiHakudata(html);
+  const data = await haeHakutulossivu(evasteet, tunnus, 1);
   const osuma = data?.products.find((p) => p.CardReferenceCode === tunnus);
   if (!osuma || !osuma.contentId) return null;
 

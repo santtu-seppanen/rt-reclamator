@@ -1,4 +1,5 @@
 import type { RtEhdotus } from "./rtAnalyysi.js";
+import type { HakemistoKortti } from "./rtKortisto.js";
 
 export interface Kuva {
   id: string;
@@ -122,4 +123,55 @@ export async function tallennaRtKortti(
     .bind(tunnus, otsikko, tiivistelma, haettuAika)
     .run();
   return { tunnus, otsikko, tiivistelma, haettuAika };
+}
+
+/**
+ * Hakemisto kaikkien oikeasti olemassa olevien RT-korttien tunnuksista
+ * (ks. worker/src/rtKortisto.ts:n haeHakemistoSivu). Käytetään validoimaan
+ * ettei mallin /analysoi:ssa ehdottama RT-korttitunnus ole hallusinoitu.
+ */
+export async function tallennaHakemistoRivit(db: D1Database, rivit: HakemistoKortti[]): Promise<void> {
+  if (rivit.length === 0) return;
+  const paivitetty = new Date().toISOString();
+  const lausekkeet = rivit.map((r) =>
+    db
+      .prepare(
+        `INSERT INTO rt_kortti_hakemisto (tunnus, otsikko, tyyppi, julkaistu, content_id, paivitetty)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(tunnus) DO UPDATE SET
+           otsikko = excluded.otsikko,
+           tyyppi = excluded.tyyppi,
+           julkaistu = excluded.julkaistu,
+           content_id = excluded.content_id,
+           paivitetty = excluded.paivitetty`,
+      )
+      .bind(r.tunnus, r.otsikko, r.tyyppi, r.julkaistu, r.contentId, paivitetty),
+  );
+  await db.batch(lausekkeet);
+}
+
+export interface HakemistoHakutulos {
+  tunnus: string;
+  otsikko: string;
+}
+
+/** Nopea tunnus+nimi-haku hakemistosta — malli käyttää tätä kesken /analysoi:ta (ks. rtAnalyysi.ts). */
+export async function hakemistohaku(db: D1Database, hakusana: string, raja = 8): Promise<HakemistoHakutulos[]> {
+  const kysely = `%${hakusana}%`;
+  const { results } = await db
+    .prepare("SELECT tunnus, otsikko FROM rt_kortti_hakemisto WHERE tunnus LIKE ?1 OR otsikko LIKE ?1 LIMIT ?2")
+    .bind(kysely, raja)
+    .all<HakemistoHakutulos>();
+  return results;
+}
+
+/** Onko tunnus oikeasti olemassa hakemistossa (eli kortistossa) — käytetään hallusinaatiosuodatukseen. */
+export async function onkoRtKorttiHakemistossa(db: D1Database, tunnus: string): Promise<boolean> {
+  const rivi = await db.prepare("SELECT 1 FROM rt_kortti_hakemisto WHERE tunnus = ?").bind(tunnus).first();
+  return rivi !== null;
+}
+
+export async function hakemistonKoko(db: D1Database): Promise<number> {
+  const rivi = await db.prepare("SELECT COUNT(*) AS maara FROM rt_kortti_hakemisto").first<{ maara: number }>();
+  return rivi?.maara ?? 0;
 }
