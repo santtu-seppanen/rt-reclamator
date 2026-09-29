@@ -138,18 +138,28 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     hakemistopäivitys aina käyttöönoton yhteydessä (tyhjä hakemisto = kaikki
     ehdotusten korttitunnukset tyhjenevät) ja satunnaisesti myöhemmin
     kortiston sisällön muuttuessa — ei toistaiseksi ajastettu automaattisesti.
-  - **Käyttöönotto (tekee käyttäjä itse, ei automatisoitu):**
+  - **Ensiasennus (tekee käyttäjä itse, ei automatisoitu):**
     `cd worker && ./deploy.sh` (tai `npm run setup`) — yksi skripti joka
     hoitaa kirjautumisen, D1-tietokannan ja R2-kuvavaraston luonnin (jos
     eivät jo olemassa), `database_id`:n kirjoittamisen `wrangler.toml`:iin,
     migraatioiden ajon, salaisuuksien kysymisen (`JAETTU_SALASANA`,
     `ANTHROPIC_API_KEY`, `RAKENNUSTIETO_USERNAME`, `RAKENNUSTIETO_PASSWORD`
-    — jos eivät jo asetettu) ja lopuksi deployn.
-    Turvallinen ajaa uudelleen. Tulostaa lopuksi Workerin URL:n, joka
-    pitää asettaa `VITE_API_URL`-build-time-env-muuttujaksi (ks.
-    `app/.env.local.example`) sekä paikalliseen kehitykseen että GitHub
-    Actions -buildiin — sama URL palvelee kaikkia reittejä. Pelkkä uusi
-    deploy ilman provisiointia: `npm run deploy`.
+    — jos eivät jo asetettu) ja lopuksi deployn. Turvallinen ajaa
+    uudelleen — käytä tätä myös salaisuuksien vaihtoon
+    (`wrangler secret put <NIMI>`) tai manuaaliseen deployhin paikalta.
+    Tulostaa lopuksi Workerin URL:n, joka pitää asettaa `VITE_API_URL`
+    -build-time-env-muuttujaksi (ks. `app/.env.local.example`) sekä
+    paikalliseen kehitykseen että GitHub Actions -buildiin.
+  - **Jatkuva käyttöönotto:** `.github/workflows/deploy-worker.yml` ajaa
+    typecheckin+testit, migraatiot (`--remote`) ja `wrangler deploy`:n
+    automaattisesti aina kun `worker/`-hakemistoon pushataan `main`-
+    haaraan (tai käsin `workflow_dispatch`illa) — käyttää
+    `cloudflare/wrangler-action`ia `CLOUDFLARE_API_TOKEN`/
+    `CLOUDFLARE_ACCOUNT_ID`-GitHub-secreteillä, ei `wrangler login`ia.
+    Tämä hoitaa vain koodin päivityksen olemassa oleviin resursseihin —
+    ei koske jo asetettuihin salaisuuksiin eikä D1/R2-resurssien luontiin,
+    joten `./deploy.sh`:n ensiasennus pitää silti tehdä kerran käsin ennen
+    kuin tämä workflow toimii.
 
 ## Konventiot
 
