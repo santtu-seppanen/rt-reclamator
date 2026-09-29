@@ -77,7 +77,7 @@ export function Etusivu() {
     return (
       <div className="tulos-kortti">
         <h2>Havaitut rakennusvirheet</h2>
-        <EhdotusLista havainto={tulos.havainto} ehdotukset={tulos.ehdotukset} />
+        <EhdotusLista kuvaId={tulos.id} havainto={tulos.havainto} ehdotukset={tulos.ehdotukset} />
         <button type="button" className="nappi nappi-ensisijainen" onClick={aloitaAlusta}>
           Analysoi uusi kuva
         </button>

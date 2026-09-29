@@ -1,4 +1,4 @@
-import type { Analyysi, RtKorttiVastaus } from "./types";
+import type { Analyysi, PalautePyynto, Reklamaatio, ReklamaatioPyynto, RtKorttiVastaus } from "./types";
 
 /** Hakee kaikki aiemmat kuva-analyysit Cloudflare Workerista (D1-tietokanta), historianäkymää varten. */
 export async function haeAnalyysit(): Promise<Analyysi[]> {
@@ -81,4 +81,56 @@ export async function haeRtKortinSisalto(tunnus: string): Promise<RtKorttiVastau
   }
 
   return data;
+}
+
+/**
+ * Pyytää Workerilta (POST /reklamaatio) tekoälyn kirjoittaman
+ * reklamaatioluonnoksen valituista ehdotuksista.
+ */
+export async function kirjoitaReklamaatio(pyynto: ReklamaatioPyynto): Promise<Reklamaatio> {
+  const url = `${import.meta.env.VITE_API_URL}/reklamaatio`;
+
+  const vastaus = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Jaettu-Salasana": import.meta.env.VITE_JAETTU_SALASANA,
+    },
+    body: JSON.stringify(pyynto),
+  });
+
+  const data = (await vastaus.json().catch(() => null)) as
+    | Reklamaatio
+    | { error: string }
+    | null;
+
+  if (!vastaus.ok || !data || "error" in data) {
+    const virhe = data && "error" in data ? data.error : "Reklamaation kirjoitus epäonnistui";
+    throw new Error(virhe);
+  }
+
+  return data;
+}
+
+/**
+ * Lähettää käyttäjän palautteen reklamaatioluonnoksesta Workeriin
+ * (POST /palaute). Palaute kerätään tekoälyn ohjeistuksen
+ * (worker/src/rtAnalyysi.ts, worker/src/reklamaatio.ts) parantamiseen.
+ */
+export async function lahetaPalaute(pyynto: PalautePyynto): Promise<void> {
+  const url = `${import.meta.env.VITE_API_URL}/palaute`;
+
+  const vastaus = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Jaettu-Salasana": import.meta.env.VITE_JAETTU_SALASANA,
+    },
+    body: JSON.stringify(pyynto),
+  });
+
+  if (!vastaus.ok) {
+    const data = (await vastaus.json().catch(() => null)) as { error: string } | null;
+    throw new Error(data?.error ?? "Palautteen lähetys epäonnistui");
+  }
 }

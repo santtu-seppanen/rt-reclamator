@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { RtEhdotus, RtKorttiVastaus, Varmuus } from "./types";
 import { haeRtKortinSisalto } from "./analyysiApi";
 import { Modaali } from "../../lib/Modaali";
+import { Reklamaatio } from "./Reklamaatio";
 
 const VARMUUS_TEKSTI: Record<Varmuus, string> = {
   korkea: "Korkea varmuus",
@@ -10,12 +11,13 @@ const VARMUUS_TEKSTI: Record<Varmuus, string> = {
 };
 
 interface EhdotusListaProps {
+  kuvaId: string;
   havainto: string;
   ehdotukset: RtEhdotus[];
 }
 
 /** Näyttää yhden kuvan analyysin: mallin havainto kuvasta ja RT-korttiehdotukset. */
-export function EhdotusLista({ havainto, ehdotukset }: EhdotusListaProps) {
+export function EhdotusLista({ kuvaId, havainto, ehdotukset }: EhdotusListaProps) {
   // Kevyt komponentin sisäinen välimuisti tunnuksen mukaan — Worker
   // välimuistittaa haun jo D1:een, mutta turha verkkokutsu kannattaa
   // silti välttää jos käyttäjä avaa/sulkee saman kortin moneen kertaan.
@@ -95,6 +97,8 @@ export function EhdotusLista({ havainto, ehdotukset }: EhdotusListaProps) {
           ))}
         </ul>
       )}
+
+      {ehdotukset.length > 0 && <Reklamaatio kuvaId={kuvaId} ehdotukset={ehdotukset} />}
 
       <p className="ehdotus-vastuuvapaus">
         Tekoälyn arvioita, ei lakineuvontaa. Yllä olevat RT-kortti- ja lakipykäläehdotukset ovat

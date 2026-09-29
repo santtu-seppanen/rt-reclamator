@@ -60,6 +60,26 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   kuvani" -valinnalla samalla laitekohtaisella nimimerkkimuistilla kuin
   lähetyslomake. Rivin avaaminen näyttää sen virhe-/reklamaatioehdotukset
   uudelleen.
+- Reklamaatioluonnos (`Reklamaatio.tsx`, "Kirjoita reklamaatio" -nappi
+  `EhdotusLista.tsx`:ssä sekä heti analyysin jälkeen että historiassa, jos
+  ehdotuksia on): käyttäjä valitsee mukaan otettavat ehdotukset ja antaa
+  vapaaehtoiset lisätiedot (urakoitsija, osoite, päiväykset), Worker
+  kirjoittaa luonnoksen (`POST /reklamaatio`, `worker/src/reklamaatio.ts`).
+  Luonnos on muokattava tekstikenttä + kopiointinappi. Malli saa käyttää
+  **vain** analyysin jo tuottamia (hakemistoa vasten varmistettuja)
+  RT-kortteja ja lakipykäliä eikä keksi nimiä/päivämääriä — tuntemattomat
+  jäävät hakasulkeisiin paikkamerkeiksi.
+- Palaute (`PalauteLomake.tsx`) kysytään **vasta reklamaatioluonnoksen
+  jälkeen**, ei suoraan analyysin tuloksessa: 👍/👎 + kommentti koko
+  luonnoksesta (mukana käyttäjän muokkaama teksti jos se poikkeaa
+  luonnoksesta) sekä erikseen jokaisesta reklamaatioon valitusta
+  ehdotuksesta. Menee `POST /palaute`:lle. **Tarkoitus on yksinomaan
+  tekoälyn ohjeistuksen (`rtAnalyysi.ts`:n ja `reklamaatio.ts`:n
+  kehotteet) parantaminen** — palaute ei muuta tallennettua analyysia
+  eikä vaikuta tuleviin analyyseihin automaattisesti. Kehotetta
+  parannettaessa hae palautteet `GET /palaute?arvio=huono` (ks. reitit)
+  ja etsi niistä toistuvia virhetyyppejä; luonnoksen ja `muokattuTeksti`:n
+  ero kertoo suoraan, mitä luonnoksessa piti korjata.
 - Sijainti (lat/lng) tallennetaan kuvan mukana **pelkkänä metatietona**
   (esim. mahdollista tulevaa "näytä kartalla" -näkymää varten) — sillä ei
   ole mitään vaikutusta siihen, näytetäänkö tai avautuuko jokin sisältö.
@@ -77,7 +97,13 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   - **Cloudflare D1** (SQLite) — taulu `kuvat` (ks. `worker/migrations/`):
     id, tekija, tiedostonimi (R2-avain), muistiinpano, lat/lng
     (molemmat nullable), havainto (mallin kuvaus kuvasta), ehdotukset
-    (JSON-taulukko RT-ehdotuksia) ja aika. Lisäksi taulu `rt_kortit`:
+    (JSON-taulukko RT-ehdotuksia), tila ("nopea"/"taydellinen", NULL
+    vanhoilla riveillä) ja aika. Taulu `reklamaatiot`: kuva_id,
+    ehdotus_indeksit (JSON), lisatieto, teksti (luonnos), tekija, aika.
+    Taulu `palaute`: reklamaatio_id, ehdotus_indeksi (yksi reklamaatioon
+    valituista, NULL = koko luonnos), arvio ("hyva"/"huono"/NULL),
+    kommentti, muokattu_teksti, tekija, aika.
+    Lisäksi taulu `rt_kortit`:
     tunnus (esim. "RT 85-11253", PK), otsikko, tiivistelma, haettu_aika —
     välimuisti `GET /rt-kortti`-reitille (ks. alla), ettei samaa korttia
     tarvitse hakea/kirjautua/tiivistää uudelleen.
@@ -138,6 +164,22 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     hakemistopäivitys aina käyttöönoton yhteydessä (tyhjä hakemisto = kaikki
     ehdotusten korttitunnukset tyhjenevät) ja satunnaisesti myöhemmin
     kortiston sisällön muuttuessa — ei toistaiseksi ajastettu automaattisesti.
+  - `POST /reklamaatio` — jaettu salasana; body `{ kuvaId,
+    ehdotusIndeksit: number[], lisatieto, tekija }`
+    (`validoiReklamaatioPyynto`). Kirjoittaa luonnoksen Anthropic-API:lla
+    (mukaan jo välimuistissa olevat RT-korttien tiivistelmät, uusia ei
+    haeta), tallentaa sen `reklamaatiot`-tauluun ja palauttaa rivin.
+  - `POST /palaute` — jaettu salasana; body `{ reklamaatioId,
+    ehdotusIndeksi (number|null), arvio ("hyva"|"huono"|null), kommentti,
+    muokattuTeksti, tekija }`, arvio tai kommentti pakollinen
+    (`validoiPalautePyynto`). 404 jos reklamaatiota ei ole, 400 jos
+    indeksi ei ole reklamaatioon valittu.
+  - `GET /palaute?arvio=huono|hyva` — jaettu salasana; kehittäjän
+    työkalu, ei frontendin käytössä. Palauttaa palautteet uusimmasta
+    vanhimpaan yhdistettynä reklamaatioluonnokseen ja analyysiin
+    (lisätieto, havainto, tila, arvioitu ehdotus ja kaikki ehdotukset),
+    eli kaikki mitä tarvitaan kehotteiden parantamiseen yhdellä haulla:
+    `curl -H "X-Jaettu-Salasana: …" "<worker-url>/palaute?arvio=huono"`.
   - **Ensiasennus (tekee käyttäjä itse, ei automatisoitu):**
     `cd worker && ./deploy.sh` (tai `npm run setup`) — yksi skripti joka
     hoitaa kirjautumisen, D1-tietokannan ja R2-kuvavaraston luonnin (jos

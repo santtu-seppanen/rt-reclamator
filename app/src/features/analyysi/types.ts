@@ -26,5 +26,38 @@ export interface Analyysi {
   lng: number | null;
   havainto: string;
   ehdotukset: RtEhdotus[];
+  /** null vanhoilla analyyseilla, jotka tallennettiin ennen tilan tallentamista. */
+  tila: "nopea" | "taydellinen" | null;
   aika: string;
+}
+
+export type PalauteArvio = "hyva" | "huono";
+
+export interface ReklamaatioPyynto {
+  kuvaId: string;
+  /** Mitkä analyysin ehdotukset (indeksit) otetaan reklamaatioon. */
+  ehdotusIndeksit: number[];
+  lisatieto: string | null;
+  tekija: string | null;
+}
+
+/** Tekoälyn kirjoittama reklamaatioluonnos (ks. POST /reklamaatio). */
+export interface Reklamaatio extends ReklamaatioPyynto {
+  id: string;
+  teksti: string;
+  aika: string;
+}
+
+/**
+ * Käyttäjän palaute reklamaatioluonnoksesta (ehdotusIndeksi null) tai
+ * yhdestä siihen valitusta ehdotuksesta.
+ */
+export interface PalautePyynto {
+  reklamaatioId: string;
+  ehdotusIndeksi: number | null;
+  arvio: PalauteArvio | null;
+  kommentti: string | null;
+  /** Käyttäjän muokkaama reklamaatioteksti, jos se poikkeaa luonnoksesta. */
+  muokattuTeksti: string | null;
+  tekija: string | null;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validoiAnalysoiPyynto } from "./validointi";
+import { validoiAnalysoiPyynto, validoiPalautePyynto, validoiReklamaatioPyynto } from "./validointi";
 
 describe("validoiAnalysoiPyynto", () => {
   const validipyynto = {
@@ -240,5 +240,101 @@ describe("validoiAnalysoiPyynto", () => {
         expect(tulos.virhe).toBe("Pyyntö täytyy olla JSON-objekti");
       }
     });
+  });
+});
+
+describe("validoiReklamaatioPyynto", () => {
+  it("hyväksyy validin pyynnön, poistaa tuplaindeksit ja järjestää ne", () => {
+    const tulos = validoiReklamaatioPyynto({
+      kuvaId: "abc",
+      ehdotusIndeksit: [2, 0, 2],
+      lisatieto: "  Urakoitsija Oy, sopimus 1.3.2026  ",
+      tekija: "Testaaja",
+    });
+
+    expect(tulos.ok).toBe(true);
+    if (tulos.ok) {
+      expect(tulos.pyynto).toEqual({
+        kuvaId: "abc",
+        ehdotusIndeksit: [0, 2],
+        lisatieto: "Urakoitsija Oy, sopimus 1.3.2026",
+        tekija: "Testaaja",
+      });
+    }
+  });
+
+  it("hylkää tyhjän indeksitaulukon", () => {
+    expect(validoiReklamaatioPyynto({ kuvaId: "abc", ehdotusIndeksit: [] }).ok).toBe(false);
+  });
+
+  it("hylkää negatiiviset tai desimaaliset indeksit", () => {
+    expect(validoiReklamaatioPyynto({ kuvaId: "abc", ehdotusIndeksit: [-1] }).ok).toBe(false);
+    expect(validoiReklamaatioPyynto({ kuvaId: "abc", ehdotusIndeksit: [0.5] }).ok).toBe(false);
+  });
+
+  it("hylkää puuttuvan kuvaId:n", () => {
+    expect(validoiReklamaatioPyynto({ ehdotusIndeksit: [0] }).ok).toBe(false);
+  });
+
+  it("hylkää liian pitkän lisätiedon", () => {
+    expect(validoiReklamaatioPyynto({ kuvaId: "abc", ehdotusIndeksit: [0], lisatieto: "a".repeat(1001) }).ok).toBe(false);
+  });
+});
+
+describe("validoiPalautePyynto", () => {
+  it("hyväksyy arvion yksittäisestä ehdotuksesta", () => {
+    const tulos = validoiPalautePyynto({ reklamaatioId: "r1", ehdotusIndeksi: 1, arvio: "huono" });
+
+    expect(tulos.ok).toBe(true);
+    if (tulos.ok) {
+      expect(tulos.pyynto).toEqual({
+        reklamaatioId: "r1",
+        ehdotusIndeksi: 1,
+        arvio: "huono",
+        kommentti: null,
+        muokattuTeksti: null,
+        tekija: null,
+      });
+    }
+  });
+
+  it("hyväksyy pelkän kommentin ja muokatun tekstin koko reklamaatiosta", () => {
+    const tulos = validoiPalautePyynto({
+      reklamaatioId: "r1",
+      ehdotusIndeksi: null,
+      kommentti: "  Kosteusvaurio jäi huomaamatta  ",
+      muokattuTeksti: "Reklamaatio: ...",
+      tekija: " Testaaja ",
+    });
+
+    expect(tulos.ok).toBe(true);
+    if (tulos.ok) {
+      expect(tulos.pyynto.ehdotusIndeksi).toBeNull();
+      expect(tulos.pyynto.arvio).toBeNull();
+      expect(tulos.pyynto.kommentti).toBe("Kosteusvaurio jäi huomaamatta");
+      expect(tulos.pyynto.muokattuTeksti).toBe("Reklamaatio: ...");
+      expect(tulos.pyynto.tekija).toBe("Testaaja");
+    }
+  });
+
+  it("hylkää palautteen ilman arviota ja kommenttia", () => {
+    expect(validoiPalautePyynto({ reklamaatioId: "r1", kommentti: "   " }).ok).toBe(false);
+  });
+
+  it("hylkää puuttuvan reklamaatioId:n", () => {
+    expect(validoiPalautePyynto({ arvio: "hyva" }).ok).toBe(false);
+  });
+
+  it("hylkää tuntemattoman arvion", () => {
+    expect(validoiPalautePyynto({ reklamaatioId: "r1", arvio: "ok" }).ok).toBe(false);
+  });
+
+  it("hylkää negatiivisen tai desimaalisen ehdotusIndeksin", () => {
+    expect(validoiPalautePyynto({ reklamaatioId: "r1", arvio: "hyva", ehdotusIndeksi: -1 }).ok).toBe(false);
+    expect(validoiPalautePyynto({ reklamaatioId: "r1", arvio: "hyva", ehdotusIndeksi: 0.5 }).ok).toBe(false);
+  });
+
+  it("hylkää liian pitkän kommentin", () => {
+    expect(validoiPalautePyynto({ reklamaatioId: "r1", kommentti: "a".repeat(1001) }).ok).toBe(false);
   });
 });

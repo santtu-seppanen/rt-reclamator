@@ -89,7 +89,7 @@ export function Historia({ onSulje }: HistoriaProps) {
               </button>
 
               {avoinId === analyysi.id && (
-                <EhdotusLista havainto={analyysi.havainto} ehdotukset={analyysi.ehdotukset} />
+                <EhdotusLista kuvaId={analyysi.id} havainto={analyysi.havainto} ehdotukset={analyysi.ehdotukset} />
               )}
             </li>
           ))}
