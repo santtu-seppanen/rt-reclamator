@@ -22,6 +22,7 @@ export interface AnalysoiPyynto {
     tiedostopaate: string;
     data: string;
   };
+  tila: "nopea" | "taydellinen";
 }
 
 /**

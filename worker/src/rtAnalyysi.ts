@@ -13,6 +13,14 @@ export interface RtAnalyysi {
   ehdotukset: RtEhdotus[];
 }
 
+/**
+ * "nopea" jättää hitaan kortin sisällönhakutyökalun pois käytöstä (vain nopea
+ * D1-hakemistohaku sallittu) - vastaus muutamassa sekunnissa. "taydellinen"
+ * sallii mallin myös hakea ja lukea koko kortin sisällön ennen vastaamista,
+ * mikä voi lisätä kymmeniä sekunteja jos kortti ei ole vielä välimuistissa.
+ */
+export type AnalyysiTila = "nopea" | "taydellinen";
+
 /** Mallin käytössä olevat apuvälineet RT-korttitunnuksen varmistamiseen kesken analyysin. */
 export interface RtAnalyysiTyokalut {
   /** Nopea tunnus+nimi-haku hakemistosta (D1, ei ulkoista kutsua). */
@@ -39,7 +47,7 @@ const SISALTOHAKU_MAKSIMIMAARA = 2;
 // nollaa tunnuksen joka tapauksessa jos se ei löydy hakemistosta - RT-korttitunnus
 // ei siis koskaan pääse käyttäjälle asti hallusinoituna, vaikka malli unohtaisi
 // käyttää työkaluja.
-const SYSTEEMIKEHOTE = `Olet rakennusalan asiantuntija-avustaja, joka auttaa käyttäjää \
+const KEHOTE_ALKU = `Olet rakennusalan asiantuntija-avustaja, joka auttaa käyttäjää \
 arvioimaan mahdollisia rakennus- tai remonttivirheitä reklamaatiota varten. Käyttäjä \
 lähettää kuvan kohteesta, ja tehtäväsi on etsiä kuvasta merkkejä virheellisestä tai \
 puutteellisesta työstä (esim. väärä asennustapa, puuttuva vedeneristys, virheellinen \
@@ -48,9 +56,15 @@ kaltevuus, huono viimeistely) ja ehdottaa kuhunkin havaintoon:
 kohta, johon voi vedota siitä, miten työ olisi pitänyt tehdä.
 - Suomen lainsäädännön kohta (esim. maankäyttö- ja rakennuslaki, kuluttajansuojalaki, \
 asuntokauppalaki, urakkasopimusten yleiset sopimusehdot kuten YSE 1998), johon \
-reklamaatiossa voisi vedota.
+reklamaatiossa voisi vedota.`;
 
-Sinulla on käytössä kaksi apuvälinettä RT-korttitunnuksen varmistamiseen:
+const KEHOTE_TYOKALUT_NOPEA = `Sinulla on käytössä yksi apuväline RT-korttitunnuksen \
+varmistamiseen: ${HAKU_TYOKALU_NIMI} - nopea haku oikeiden RT-korttien tunnus+nimi-\
+hakemistosta hakusanalla (esim. havaitun virheen aihepiiri). Käytä tätä AINA kun \
+harkitset RT-korttitunnuksen ehdottamista, jotta annat vain oikeasti olemassa olevia \
+tunnuksia etkä muistinvaraisesti keksittyjä.`;
+
+const KEHOTE_TYOKALUT_TAYDELLINEN = `Sinulla on käytössä kaksi apuvälinettä RT-korttitunnuksen varmistamiseen:
 - ${HAKU_TYOKALU_NIMI}: nopea haku oikeiden RT-korttien tunnus+nimi-hakemistosta \
 hakusanalla (esim. havaitun virheen aihepiiri). Käytä tätä AINA kun harkitset \
 RT-korttitunnuksen ehdottamista, jotta annat vain oikeasti olemassa olevia tunnuksia \
@@ -59,9 +73,9 @@ etkä muistinvaraisesti keksittyjä.
 perusteella, jos haluat varmistaa että kortti todella koskee havaitsemaasi virhettä \
 ennen ehdotuksen kirjaamista. Tämä on hitaampi (voi kestää useita sekunteja) ja \
 käytettävissä enintään ${SISALTOHAKU_MAKSIMIMAARA} kertaa per analyysi - käytä \
-säästeliäästi, vain kun hakemistohaku ei yksin riitä varmistamaan osumaa.
+säästeliäästi, vain kun hakemistohaku ei yksin riitä varmistamaan osumaa.`;
 
-Jos et hakemistohaun jälkeenkään löydä oikeasti olemassa olevaa, osuvaa RT-korttia, \
+const KEHOTE_LOPPU = `Jos et hakemistohaun jälkeenkään löydä oikeasti olemassa olevaa, osuvaa RT-korttia, \
 jätä rtKortti-kenttä tyhjäksi äläkä keksi tunnusta ulkomuistista - tyhjä on aina \
 parempi kuin väärä tai olematon tunnus.
 
@@ -85,6 +99,11 @@ tämä ole sitovaa lakineuvontaa, joten ole erityisen varovainen lakipykälien k
 
 Vastaa aina suomeksi. Jos kuvassa ei näy tunnistettavaa rakennus- tai remonttityötä \
 lainkaan, kerro se havainto-kentässä ja palauta tyhjä ehdotukset-lista.`;
+
+function rakennaSysteemikehote(tila: AnalyysiTila): string {
+  const tyokaluOsio = tila === "taydellinen" ? KEHOTE_TYOKALUT_TAYDELLINEN : KEHOTE_TYOKALUT_NOPEA;
+  return `${KEHOTE_ALKU}\n\n${tyokaluOsio}\n\n${KEHOTE_LOPPU}`;
+}
 
 interface AnthropicSisaltolohko {
   type: string;
@@ -127,8 +146,7 @@ function siivoaEhdotus(raaka: unknown): RtEhdotus | null {
   };
 }
 
-const TYOKALUT = [
-  {
+const TYOKALU_KIRJAA = {
     name: TYOKALU_NIMI,
     description: "Kirjaa havainto kuvasta ja siihen mahdollisesti liittyvät rakennusvirheet reklamaatioperusteineen.",
     input_schema: {
@@ -158,30 +176,38 @@ const TYOKALUT = [
       },
       required: ["havainto", "ehdotukset"],
     },
+  };
+
+const TYOKALU_HAKU = {
+  name: HAKU_TYOKALU_NIMI,
+  description: "Hakee RT-korttien tunnus+nimi-hakemistosta hakusanalla. Palauttaa enintään muutaman osuman.",
+  input_schema: {
+    type: "object",
+    properties: { hakusana: { type: "string" } },
+    required: ["hakusana"],
   },
-  {
-    name: HAKU_TYOKALU_NIMI,
-    description: "Hakee RT-korttien tunnus+nimi-hakemistosta hakusanalla. Palauttaa enintään muutaman osuman.",
-    input_schema: {
-      type: "object",
-      properties: { hakusana: { type: "string" } },
-      required: ["hakusana"],
-    },
+};
+
+const TYOKALU_SISALTO = {
+  name: SISALTO_TYOKALU_NIMI,
+  description: "Hakee yhden RT-kortin tiivistetyn sisällön tunnuksen perusteella. Hidas, käytä säästeliäästi.",
+  input_schema: {
+    type: "object",
+    properties: { tunnus: { type: "string" } },
+    required: ["tunnus"],
   },
-  {
-    name: SISALTO_TYOKALU_NIMI,
-    description: "Hakee yhden RT-kortin tiivistetyn sisällön tunnuksen perusteella. Hidas, käytä säästeliäästi.",
-    input_schema: {
-      type: "object",
-      properties: { tunnus: { type: "string" } },
-      required: ["tunnus"],
-    },
-  },
-];
+};
+
+function rakennaTyokalut(tila: AnalyysiTila) {
+  return tila === "taydellinen"
+    ? [TYOKALU_KIRJAA, TYOKALU_HAKU, TYOKALU_SISALTO]
+    : [TYOKALU_KIRJAA, TYOKALU_HAKU];
+}
 
 async function kutsuAnthropic(
   apiAvain: string,
   messages: unknown[],
+  tila: AnalyysiTila,
   pakotaLopullinenTyokalu: boolean,
 ): Promise<AnthropicVastaus> {
   const vastaus = await fetch(ANTHROPIC_API_URL, {
@@ -194,9 +220,9 @@ async function kutsuAnthropic(
     body: JSON.stringify({
       model: MALLI,
       max_tokens: 1500,
-      system: SYSTEEMIKEHOTE,
+      system: rakennaSysteemikehote(tila),
       messages,
-      tools: TYOKALUT,
+      tools: rakennaTyokalut(tila),
       tool_choice: pakotaLopullinenTyokalu ? { type: "tool", name: TYOKALU_NIMI } : { type: "auto" },
     }),
   });
@@ -235,6 +261,7 @@ export async function analysoiRemontti(
   kuva: { data: string; tiedostopaate: string },
   muistiinpano: string | null,
   tyokalut: RtAnalyysiTyokalut,
+  tila: AnalyysiTila,
 ): Promise<RtAnalyysi> {
   const mediaType = paattelSisaltotyyppi(kuva.tiedostopaate);
   const kayttajaTeksti = muistiinpano
@@ -255,7 +282,7 @@ export async function analysoiRemontti(
 
   for (let kierros = 0; kierros < MAKSIMI_KIERROKSET; kierros++) {
     const pakotaLopullinen = kierros === MAKSIMI_KIERROKSET - 1;
-    const vastaus = await kutsuAnthropic(apiAvain, messages, pakotaLopullinen);
+    const vastaus = await kutsuAnthropic(apiAvain, messages, tila, pakotaLopullinen);
 
     const tyokaluKutsut = vastaus.content.filter((lohko) => lohko.type === "tool_use");
     const kirjausKutsu = tyokaluKutsut.find((k) => k.name === TYOKALU_NIMI);

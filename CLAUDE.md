@@ -25,7 +25,16 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   osana itse analyysiä, jos ne parantavat ehdotuksen laatua. Enintään 4
   keskustelukierrosta per analyysi, viimeinen pakottaa lopullisen
   vastauksen — pitää kokonaiskeston hallittuna vaikka malli käyttäisi
-  työkaluja.
+  työkaluja. Käyttäjä valitsee itse painotuksen kahdella napilla
+  ("Nopea analyysi" / "Täydellinen analyysi", `Etusivu.tsx`), jotka
+  lähettävät `POST /analysoi`:lle kentän `tila: "nopea" | "taydellinen"`
+  (`rtAnalyysi.ts`:n `AnalyysiTila`; puuttuessaan oletus on
+  "taydellinen"). "nopea" jättää hitaan sisällönhakutyökalun kokonaan
+  pois tarjolta (vastaus tyypillisesti muutamassa sekunnissa), koska
+  Anthropic ei voi kutsua työkalua jota ei ole `tools`-listassa —
+  "taydellinen" tarjoaa molemmat ja voi siksi joskus kestää
+  kymmeniä sekunteja. Molemmissa RT-korttitunnus on silti aina joko
+  oikea tai tyhjä (ks. alla).
 - **Ehdotukset (`POST /analysoi`) ovat tekoälyn arvioita kuvasta, eivät
   lakineuvontaa.** Mallilla ei ole lakimieskoulutusta — se antaa tarkan
   lakipykälän vain jos se on siitä kohtuullisen varma, muuten pelkän

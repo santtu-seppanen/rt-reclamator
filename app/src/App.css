@@ -218,6 +218,17 @@ body {
   gap: 0.5rem;
 }
 
+.analyysi-lahetys-napit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.analyysi-lahetys-napit .nappi {
+  flex: 1;
+  min-width: 10rem;
+}
+
 .kuva-valinta-nappi {
   flex: 1;
   width: auto;

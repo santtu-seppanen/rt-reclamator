@@ -129,7 +129,7 @@ async function kasitteleAnalysoi(
 
   let analyysi;
   try {
-    analyysi = await analysoiRemontti(env.ANTHROPIC_API_KEY, pyynto.kuva, pyynto.muistiinpano, tyokalut);
+    analyysi = await analysoiRemontti(env.ANTHROPIC_API_KEY, pyynto.kuva, pyynto.muistiinpano, tyokalut, pyynto.tila);
   } catch (virhe) {
     console.error(virhe);
     return jsonVastaus({ error: "RT-analyysi epäonnistui. Yritä uudelleen." }, 502, corsHeaders);

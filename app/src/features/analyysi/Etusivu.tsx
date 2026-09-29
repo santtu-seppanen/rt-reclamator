@@ -18,7 +18,7 @@ export function Etusivu() {
   const [tekija, setTekija] = useState(() => haeTekijanNimi());
   const [sijainti, setSijainti] = useState<Sijainti | null>(null);
   const [sijaintiTila, setSijaintiTila] = useState<"idle" | "haetaan" | "virhe">("idle");
-  const [lahetetaan, setLahetetaan] = useState(false);
+  const [lahetetaan, setLahetetaan] = useState<"nopea" | "taydellinen" | null>(null);
   const [virhe, setVirhe] = useState<string | null>(null);
   const [tulos, setTulos] = useState<Analyysi | null>(null);
 
@@ -42,12 +42,11 @@ export function Etusivu() {
     setVirhe(null);
   }
 
-  async function lahetaKuva(e: FormEvent) {
-    e.preventDefault();
+  async function kasitteleLahetys(tila: "nopea" | "taydellinen") {
     const siistiTekija = tekija.trim();
     if (!tiedosto || !siistiTekija) return;
 
-    setLahetetaan(true);
+    setLahetetaan(tila);
     setVirhe(null);
     try {
       const pakattu = await pakkaaKuva(tiedosto, KUVA_MAX_TAVUA);
@@ -57,14 +56,21 @@ export function Etusivu() {
         lat: sijainti?.lat ?? null,
         lng: sijainti?.lng ?? null,
         kuva: pakattu,
+        tila,
       });
       tallennaTekijanNimi(siistiTekija);
       setTulos(vastaus);
     } catch (virhe) {
       setVirhe(virhe instanceof Error ? virhe.message : "Analyysi epäonnistui");
     } finally {
-      setLahetetaan(false);
+      setLahetetaan(null);
     }
+  }
+
+  function lahetaLomake(e: FormEvent) {
+    // Lomakkeella ei ole yhtä oletuslähetystapaa — käyttäjä valitsee
+    // nopean tai täydellisen analyysin napista (ks. kasitteleLahetys).
+    e.preventDefault();
   }
 
   if (tulos) {
@@ -80,7 +86,7 @@ export function Etusivu() {
   }
 
   return (
-    <form className="analyysi-lomake-kontti" onSubmit={lahetaKuva}>
+    <form className="analyysi-lomake-kontti" onSubmit={lahetaLomake}>
       <h2>Kuvaa remonttikohde</h2>
       <p className="analyysi-ohje">
         Ota kuva remontti- tai rakennuskohteesta, niin sovellus etsii siitä mahdollisia
@@ -137,13 +143,26 @@ export function Etusivu() {
         </p>
       )}
 
-      <button
-        className="nappi nappi-ensisijainen"
-        type="submit"
-        disabled={!tiedosto || !tekija.trim() || lahetetaan}
-      >
-        {lahetetaan ? "Analysoidaan…" : "Analysoi kuva"}
-      </button>
+      <div className="analyysi-lahetys-napit">
+        <button
+          className="nappi nappi-toissijainen"
+          type="button"
+          onClick={() => kasitteleLahetys("nopea")}
+          disabled={!tiedosto || !tekija.trim() || lahetetaan !== null}
+          title="Nopea: käyttää vain RT-korttihakemiston tunnus- ja nimihakua, vastaus muutamassa sekunnissa."
+        >
+          {lahetetaan === "nopea" ? "Analysoidaan nopeasti…" : "Nopea analyysi"}
+        </button>
+        <button
+          className="nappi nappi-ensisijainen"
+          type="button"
+          onClick={() => kasitteleLahetys("taydellinen")}
+          disabled={!tiedosto || !tekija.trim() || lahetetaan !== null}
+          title="Täydellinen: lukee tarvittaessa myös koko RT-kortin sisällön, tarkempi mutta voi kestää jopa ~30 sekuntia."
+        >
+          {lahetetaan === "taydellinen" ? "Analysoidaan…" : "Täydellinen analyysi"}
+        </button>
+      </div>
     </form>
   );
 }

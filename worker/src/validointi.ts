@@ -1,3 +1,5 @@
+import type { AnalyysiTila } from "./rtAnalyysi.js";
+
 export interface KuvaKentta {
   tiedostopaate: string;
   data: string;
@@ -9,6 +11,7 @@ export interface AnalysoiPyynto {
   lat: number | null;
   lng: number | null;
   kuva: KuvaKentta;
+  tila: AnalyysiTila;
 }
 
 export type AnalysoiValidointiTulos =
@@ -54,6 +57,13 @@ function validoiKuvaKentta(kuva: unknown): { ok: true; kuva: KuvaKentta } | { ok
   };
 }
 
+/** Puuttuva tila = "taydellinen" (nykyinen, jo julkaistu oletuskäytös säilyy vanhoille kutsujille). */
+function validoiTila(tila: unknown): { ok: true; tila: AnalyysiTila } | { ok: false; virhe: string } {
+  if (tila === undefined || tila === null) return { ok: true, tila: "taydellinen" };
+  if (tila === "nopea" || tila === "taydellinen") return { ok: true, tila };
+  return { ok: false, virhe: 'tila täytyy olla "nopea" tai "taydellinen"' };
+}
+
 /** lat/lng ovat valinnaisia, mutta jos toinen annetaan täytyy molemmat antaa. */
 function validoiSijainti(
   lat: unknown,
@@ -77,7 +87,7 @@ export function validoiAnalysoiPyynto(data: unknown): AnalysoiValidointiTulos {
     return { ok: false, virhe: "Pyyntö täytyy olla JSON-objekti" };
   }
 
-  const { tekija, muistiinpano, lat, lng, kuva } = data as Record<string, unknown>;
+  const { tekija, muistiinpano, lat, lng, kuva, tila } = data as Record<string, unknown>;
 
   if (typeof tekija !== "string" || tekija.trim().length === 0) {
     return { ok: false, virhe: "tekija on pakollinen" };
@@ -104,6 +114,9 @@ export function validoiAnalysoiPyynto(data: unknown): AnalysoiValidointiTulos {
   const kuvaTulos = validoiKuvaKentta(kuva);
   if (!kuvaTulos.ok) return kuvaTulos;
 
+  const tilaTulos = validoiTila(tila);
+  if (!tilaTulos.ok) return tilaTulos;
+
   return {
     ok: true,
     pyynto: {
@@ -112,6 +125,7 @@ export function validoiAnalysoiPyynto(data: unknown): AnalysoiValidointiTulos {
       lat: sijaintiTulos.lat,
       lng: sijaintiTulos.lng,
       kuva: kuvaTulos.kuva,
+      tila: tilaTulos.tila,
     },
   };
 }

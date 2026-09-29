@@ -184,6 +184,35 @@ describe("validoiAnalysoiPyynto", () => {
     });
   });
 
+  describe("tila validointi", () => {
+    it("asettaa tilan 'taydellinen' jos sitä ei anneta", () => {
+      const tulos = validoiAnalysoiPyynto(validipyynto);
+
+      expect(tulos.ok).toBe(true);
+      if (tulos.ok) {
+        expect(tulos.pyynto.tila).toBe("taydellinen");
+      }
+    });
+
+    it("hyväksyy tilan 'nopea'", () => {
+      const tulos = validoiAnalysoiPyynto({ ...validipyynto, tila: "nopea" });
+
+      expect(tulos.ok).toBe(true);
+      if (tulos.ok) {
+        expect(tulos.pyynto.tila).toBe("nopea");
+      }
+    });
+
+    it("hylkää tuntemattoman tilan", () => {
+      const tulos = validoiAnalysoiPyynto({ ...validipyynto, tila: "hidas" });
+
+      expect(tulos.ok).toBe(false);
+      if (!tulos.ok) {
+        expect(tulos.virhe).toContain('"nopea"');
+      }
+    });
+  });
+
   describe("syötteen tyyppi", () => {
     it("hylkää null:in", () => {
       const tulos = validoiAnalysoiPyynto(null);
