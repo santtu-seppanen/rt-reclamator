@@ -8,6 +8,14 @@ export interface RtEhdotus {
   varmuus: Varmuus;
 }
 
+/** RT-kortin tiivistetty sisältö, haettu ja tiivistetty kortistosta (ks. GET /rt-kortti). */
+export interface RtKorttiVastaus {
+  tunnus: string;
+  otsikko: string;
+  tiivistelma: string;
+  haettuAika: string;
+}
+
 /** Yksi lähetetty kuva ja siihen saadut rakennusvirhe-/reklamaatioehdotukset. */
 export interface Analyysi {
   id: string;

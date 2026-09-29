@@ -18,3 +18,5 @@ bucket_name = "rt-reclamator-kuvat"
 # Salaisuudet (eivät tässä tiedostossa, eivät koskaan gitissä):
 #   wrangler secret put JAETTU_SALASANA
 #   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put RAKENNUSTIETO_USERNAME
+#   wrangler secret put RAKENNUSTIETO_PASSWORD

@@ -1,13 +1,16 @@
-import { haeKuvat, lisaaKuva } from "./d1.js";
+import { haeKuvat, lisaaKuva, haeRtKortti, tallennaRtKortti } from "./d1.js";
 import { haeKuva, tallennaKuva } from "./r2.js";
 import { validoiAnalysoiPyynto } from "./validointi.js";
 import { analysoiRemontti } from "./rtAnalyysi.js";
+import { kirjaudu, haeKortinSisalto, tiivistaRtKortti } from "./rtKortisto.js";
 
 interface Env {
   DB: D1Database;
   KUVAT: R2Bucket;
   JAETTU_SALASANA: string;
   ANTHROPIC_API_KEY: string;
+  RAKENNUSTIETO_USERNAME: string;
+  RAKENNUSTIETO_PASSWORD: string;
   CORS_ORIGIN: string;
 }
 
@@ -38,6 +41,10 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/analysoi") {
       return kasitteleAnalysoi(request, env, corsHeaders);
+    }
+
+    if (request.method === "GET" && url.pathname === "/rt-kortti") {
+      return kasitteleRtKortti(request, url, env, corsHeaders);
     }
 
     return jsonVastaus({ error: "Reittiä ei löydy" }, 404, corsHeaders);
@@ -120,6 +127,46 @@ async function kasitteleAnalysoi(
   } catch (virhe) {
     console.error(virhe);
     return jsonVastaus({ error: "Tallennus epäonnistui" }, 502, corsHeaders);
+  }
+}
+
+/**
+ * Hakee yhden RT-kortin tiivistelmän tunnuksen perusteella (esim. "RT 85-11253").
+ * Jos kortti on jo kerran haettu ja tiivistetty, palautetaan D1-välimuistista
+ * eikä kortistot.rakennustieto.fi:tä eikä Anthropic-API:a kutsuta uudelleen.
+ */
+async function kasitteleRtKortti(
+  request: Request,
+  url: URL,
+  env: Env,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  if (request.headers.get("X-Jaettu-Salasana") !== env.JAETTU_SALASANA) {
+    return jsonVastaus({ error: "Virheellinen salasana" }, 401, corsHeaders);
+  }
+
+  const tunnus = url.searchParams.get("tunnus")?.trim();
+  if (!tunnus) {
+    return jsonVastaus({ error: "tunnus-parametri on pakollinen" }, 400, corsHeaders);
+  }
+
+  const valimuistista = await haeRtKortti(env.DB, tunnus);
+  if (valimuistista) {
+    return jsonVastaus(valimuistista, 200, corsHeaders);
+  }
+
+  try {
+    const evasteet = await kirjaudu(env.RAKENNUSTIETO_USERNAME, env.RAKENNUSTIETO_PASSWORD);
+    const kortti = await haeKortinSisalto(evasteet, tunnus);
+    if (!kortti) {
+      return jsonVastaus({ error: "Korttia ei löytynyt tai ei lisenssiä sen sisältöön" }, 404, corsHeaders);
+    }
+    const tiivistelma = await tiivistaRtKortti(env.ANTHROPIC_API_KEY, tunnus, kortti.otsikko, kortti.pdfTavut);
+    const rivi = await tallennaRtKortti(env.DB, tunnus, kortti.otsikko, tiivistelma);
+    return jsonVastaus(rivi, 201, corsHeaders);
+  } catch (virhe) {
+    console.error(virhe);
+    return jsonVastaus({ error: "RT-kortin haku epäonnistui" }, 502, corsHeaders);
   }
 }
 

@@ -18,16 +18,17 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   joka pyytää virhe-/reklamaatioehdotukset Anthropic-API:sta (Claude,
   kuvantulkinta) ja palauttaa ne heti — käyttäjä näkee tuloksen ilman
   erillistä hakua.
-- **Ehdotukset ovat tekoälyn arvioita, eivät kortiston suora haku eikä
-  lakineuvontaa.** Worker ei hae RT-kortistoa reaaliaikaisesti eikä
-  mallilla ole lakimieskoulutusta — malli antaa tarkan korttitunnuksen tai
+- **Ehdotukset (`POST /analysoi`) ovat tekoälyn arvioita kuvasta, eivät
+  lakineuvontaa.** Mallilla ei ole lakimieskoulutusta — se antaa tarkan
   lakipykälän vain jos se on siitä kohtuullisen varma, muuten pelkän
-  aihepiirin/lakialueen sanallisesti ja rehellisen matalan varmuuden (ks.
+  lakialueen sanallisesti ja rehellisen matalan varmuuden (ks.
   `worker/src/rtAnalyysi.ts`:n `SYSTEEMIKEHOTE`). Frontend näyttää tämän
-  aina käyttäjälle (`EhdotusLista.tsx`:n vastuuvapauslauseke + linkki
-  itse kortistoon ja kehotus varmistaa lakipykälät asiantuntijalta) — älä
-  koskaan esitä ehdotuksia varmoina fakta-korttien numeroina tai sitovana
-  lakineuvontana.
+  aina käyttäjälle (`EhdotusLista.tsx`:n vastuuvapauslauseke + kehotus
+  varmistaa lakipykälät asiantuntijalta) — älä koskaan esitä ehdotuksia
+  sitovana lakineuvontana. RT-korttitunnuksen osalta `/analysoi` itse antaa
+  edelleen vain mallin arvion (ks. alla `GET /rt-kortti`, joka sen sijaan
+  hakee ja tiivistää oikean kortin sisällön, mutta jota `/analysoi` ei
+  automaattisesti kutsu ehdotusten vahvistamiseksi).
 - Historianäkymä (header → "Historia", `Historia.tsx`) listaa kaikki
   aiemmin lähetetyt kuvat (`GET /analyysit`), suodatettavissa "vain omat
   kuvani" -valinnalla samalla laitekohtaisella nimimerkkimuistilla kuin
@@ -50,14 +51,30 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   - **Cloudflare D1** (SQLite) — taulu `kuvat` (ks. `worker/migrations/`):
     id, tekija, tiedostonimi (R2-avain), muistiinpano, lat/lng
     (molemmat nullable), havainto (mallin kuvaus kuvasta), ehdotukset
-    (JSON-taulukko RT-ehdotuksia) ja aika.
+    (JSON-taulukko RT-ehdotuksia) ja aika. Lisäksi taulu `rt_kortit`:
+    tunnus (esim. "RT 85-11253", PK), otsikko, tiivistelma, haettu_aika —
+    välimuisti `GET /rt-kortti`-reitille (ks. alla), ettei samaa korttia
+    tarvitse hakea/kirjautua/tiivistää uudelleen.
   - **Cloudflare R2** — itse kuvatiedostot. Worker tarjoilee ne
     `GET /kuvat/:tiedostonimi`-reitin kautta, joten frontend rakentaa
     kuvan URL:n `${VITE_API_URL}/kuvat/<tiedosto>`.
-  - **Anthropic API** (Claude, kuvantulkinta) — `worker/src/rtAnalyysi.ts`
-    kutsuu sitä suoraan `fetch`:illä (ei SDK-riippuvuutta) pakotetulla
+  - **Anthropic API** (Claude, kuvantulkinta ja RT-korttien tiivistys) —
+    `worker/src/rtAnalyysi.ts` ja `worker/src/rtKortisto.ts` kutsuvat sitä
+    suoraan `fetch`:illä (ei SDK-riippuvuutta) pakotetulla
     työkalukutsulla (`tool_choice`), jotta vastaus on aina jäsennelty
     JSON eikä vapaamuotoista tekstiä.
+  - **kortistot.rakennustieto.fi** — `worker/src/rtKortisto.ts` kirjautuu
+    sisään Workerin salaisuuksiin tallennetulla henkilökohtaisella/
+    yrityslisenssillä (`RAKENNUSTIETO_USERNAME`/`RAKENNUSTIETO_PASSWORD`,
+    sama SSO-kirjautuminen jota selainkin käyttää: NextAuth → AWS Cognito →
+    Rakennustieto-UAA) ja hakee **vain yksittäisen, jo tunnetun kortin**
+    tunnuksen perusteella (ei kortiston massalatausta). **Huom:** kaikki
+    sovelluksen käyttäjät käyttävät tässä samaa yhtä lisenssiä palvelimen
+    kautta — tämä on tietoinen päätös, varmista että se on sallittua
+    lisenssiehtojenne mukaan jos käyttäjäkunta kasvaa. Kirjautumisen HTML-
+    rakenteeseen sidotut yksityiskohdat (lomakkeen `_csrf`, kolme eri
+    lomaketta samalla sivulla) voivat rikkoutua jos rakennustieto.fi
+    muuttaa kirjautumissivuaan.
 - **`worker/` — Cloudflare Worker, koko sovelluksen backend.** Reitit:
   - `GET /analyysit` — palauttaa kaikki kuva-analyysit D1:stä uusimmasta
     vanhimpaan. Julkinen, ei vaadi salasanaa — kuvahistoria ei ole
@@ -71,12 +88,22 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     autentikointi), kutsuu `analysoiRemontti`:a, tallentaa kuvan R2:een
     ja rivin `kuvat`-tauluun, ja palauttaa koko tallennetun rivin
     (ehdotukset mukana) suoraan vastauksessa.
+  - `GET /rt-kortti?tunnus=<esim. "RT 85-11253">` — tarkistaa jaetun
+    salasanan (sama header/syy kuin `/analysoi`), katsoo löytyykö tunnus jo
+    `rt_kortit`-taulusta (jos löytyy, palauttaa sen heti eikä kutsu mitään
+    ulkoista palvelua). Jos ei löydy: kirjautuu kortistot.rakennustieto.fi:hin
+    (`rtKortisto.ts`:n `kirjaudu`), hakee kortin PDF-sisällön
+    (`haeKortinSisalto`), pyytää siitä suomenkielisen tiivistelmän
+    Anthropic-API:lta (`tiivistaRtKortti`) ja tallentaa tuloksen
+    `rt_kortit`-tauluun ennen palautusta. 404 jos tunnusta ei löydy tai
+    lisenssi ei kata sitä.
   - **Käyttöönotto (tekee käyttäjä itse, ei automatisoitu):**
     `cd worker && ./deploy.sh` (tai `npm run setup`) — yksi skripti joka
     hoitaa kirjautumisen, D1-tietokannan ja R2-kuvavaraston luonnin (jos
     eivät jo olemassa), `database_id`:n kirjoittamisen `wrangler.toml`:iin,
     migraatioiden ajon, salaisuuksien kysymisen (`JAETTU_SALASANA`,
-    `ANTHROPIC_API_KEY`, jos eivät jo asetettu) ja lopuksi deployn.
+    `ANTHROPIC_API_KEY`, `RAKENNUSTIETO_USERNAME`, `RAKENNUSTIETO_PASSWORD`
+    — jos eivät jo asetettu) ja lopuksi deployn.
     Turvallinen ajaa uudelleen. Tulostaa lopuksi Workerin URL:n, joka
     pitää asettaa `VITE_API_URL`-build-time-env-muuttujaksi (ks.
     `app/.env.local.example`) sekä paikalliseen kehitykseen että GitHub
@@ -135,12 +162,14 @@ npx wrangler d1 migrations apply rt-reclamator-db --local
 npm run dev
 ```
 
-`POST /analysoi` vaatii lisäksi paikalliset salaisuudet — luo
-`worker/.dev.vars` (gitignorattu):
+`POST /analysoi` ja `GET /rt-kortti` vaativat lisäksi paikalliset
+salaisuudet — luo `worker/.dev.vars` (gitignorattu):
 
 ```
 JAETTU_SALASANA=<mikä tahansa arvo, sama kuin app/.env.local:in VITE_JAETTU_SALASANA>
 ANTHROPIC_API_KEY=<oikea Anthropic API -avain — analyysi tekee oikean, maksullisen API-kutsun myös paikallisesti>
+RAKENNUSTIETO_USERNAME=<oikea kortistot.rakennustieto.fi-tunnus — vaaditaan vain /rt-kortti:lle>
+RAKENNUSTIETO_PASSWORD=<sen salasana>
 ```
 
 ```bash

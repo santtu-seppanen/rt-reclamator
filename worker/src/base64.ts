@@ -7,3 +7,14 @@ export function base64ToBytes(base64: string): Uint8Array {
   for (let i = 0; i < binaari.length; i++) tavut[i] = binaari.charCodeAt(i);
   return tavut;
 }
+
+export function bytesToBase64(tavut: Uint8Array): string {
+  // btoa vaatii merkkijonon - rakennetaan se paloissa ettei suurilla
+  // tiedostoilla (RT-korttien PDF:t) ylitetä funktion argumenttien pinorajaa.
+  const PALAN_KOKO = 8192;
+  let binaari = "";
+  for (let i = 0; i < tavut.length; i += PALAN_KOKO) {
+    binaari += String.fromCharCode(...tavut.subarray(i, i + PALAN_KOKO));
+  }
+  return btoa(binaari);
+}

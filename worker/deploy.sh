@@ -85,6 +85,8 @@ aseta_salaisuus() {
 
 aseta_salaisuus "JAETTU_SALASANA"
 aseta_salaisuus "ANTHROPIC_API_KEY"
+aseta_salaisuus "RAKENNUSTIETO_USERNAME"
+aseta_salaisuus "RAKENNUSTIETO_PASSWORD"
 
 echo
 echo "== Deploy =="

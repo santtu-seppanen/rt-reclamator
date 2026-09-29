@@ -1,4 +1,4 @@
-import type { Analyysi } from "./types";
+import type { Analyysi, RtKorttiVastaus } from "./types";
 
 /** Hakee kaikki aiemmat kuva-analyysit Cloudflare Workerista (D1-tietokanta), historianäkymää varten. */
 export async function haeAnalyysit(): Promise<Analyysi[]> {
@@ -48,6 +48,34 @@ export async function analysoiKuva(pyynto: AnalysoiPyynto): Promise<Analyysi> {
 
   if (!vastaus.ok || !data || "error" in data) {
     const virhe = data && "error" in data ? data.error : "Analyysi epäonnistui";
+    throw new Error(virhe);
+  }
+
+  return data;
+}
+
+/**
+ * Hakee ja tiivistää oikean RT-kortin sisällön kortistosta annetulla
+ * tunnuksella (esim. "RT 85-11253"). Worker välimuistittaa vastauksen
+ * D1:een, mutta yksittäinen haku voi silti kestää hetken (PDF-haku +
+ * tiivistys Anthropic-API:lla ensimmäisellä kerralla).
+ */
+export async function haeRtKortinSisalto(tunnus: string): Promise<RtKorttiVastaus> {
+  const url = `${import.meta.env.VITE_API_URL}/rt-kortti?tunnus=${encodeURIComponent(tunnus)}`;
+
+  const vastaus = await fetch(url, {
+    headers: {
+      "X-Jaettu-Salasana": import.meta.env.VITE_JAETTU_SALASANA,
+    },
+  });
+
+  const data = (await vastaus.json().catch(() => null)) as
+    | RtKorttiVastaus
+    | { error: string }
+    | null;
+
+  if (!vastaus.ok || !data || "error" in data) {
+    const virhe = data && "error" in data ? data.error : "Kortin haku epäonnistui";
     throw new Error(virhe);
   }
 
