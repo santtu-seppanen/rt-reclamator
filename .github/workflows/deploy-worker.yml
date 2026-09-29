@@ -18,7 +18,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Wrangler 4 vaatii Node 22+ - wrangler-action tarkistaa tämän itse
+          # ja asentaa vanhemman varaversionsa jos runnerin Node on liian
+          # vanha, mikä törmää projektin muihin riippuvuuksiin.
+          node-version: 22
           cache: npm
           cache-dependency-path: worker/package-lock.json
       - run: npm install
