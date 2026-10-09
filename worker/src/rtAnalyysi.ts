@@ -40,12 +40,10 @@ export interface RtAnalyysiTyokalut {
 }
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-// "nopea" käyttää pienempää, nopeampaa mallia (ei ajattelua oletuksena);
-// "taydellinen" ajattelevaa Sonnetia.
-const MALLIT: Record<AnalyysiTila, string> = {
-  nopea: "claude-haiku-4-5",
-  taydellinen: "claude-sonnet-5",
-};
+// Haiku 4.5 kokeiltiin "nopea"-tilaan (~17 s), mutta se tulkitsi kuvia
+// selvästi huonommin (mm. väärä tila -> väärä RT-kortti); Sonnet matalalla
+// effortilla on hieman hitaampi mutta laadultaan lähes täydellisen veroinen.
+const MALLI = "claude-sonnet-5";
 const TYOKALU_NIMI = "kirjaa_rt_ehdotukset";
 const HAKU_TYOKALU_NIMI = "hae_rt_kortteja_hakemistosta";
 const SISALTO_TYOKALU_NIMI = "hae_rt_kortin_sisalto";
@@ -237,13 +235,17 @@ async function kutsuAnthropic(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: MALLIT[tila],
+      model: MALLI,
       // Malli käyttää osan budjetista ajatteluun ennen lopullista työkalukutsua;
       // 1500 katkaisi kirjauksen kesken niin, että ehdotukset-kenttä puuttui.
       max_tokens: 8000,
       system: rakennaSysteemikehote(tila),
       messages,
       tools: rakennaTyokalut(tila),
+      // Malli ajattelee oletuksena (adaptive, effort "high"). "nopea"-tilassa
+      // matala effort lyhentää ajattelua: mitattuna ~40 s -> ~25 s samalla
+      // kuvalla ilman havaittavaa laadun laskua.
+      ...(tila === "nopea" ? { output_config: { effort: "low" } } : {}),
       tool_choice: pakotaLopullinenTyokalu ? { type: "tool", name: TYOKALU_NIMI } : { type: "auto" },
     }),
   });
