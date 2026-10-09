@@ -163,6 +163,9 @@ function siivoaEhdotus(raaka: unknown): RtEhdotus | null {
 const TYOKALU_KIRJAA = {
     name: TYOKALU_NIMI,
     description: "Kirjaa havainto kuvasta ja siihen mahdollisesti liittyvät rakennusvirheet reklamaatioperusteineen.",
+    // strict: API validoi syötteen skeemaa vasten, jotta ehdotukset tulevat
+    // aina omana taulukkonaan eivätkä tekstinä havainto-kentän sisällä.
+    strict: true,
     input_schema: {
       type: "object",
       properties: {
@@ -185,10 +188,12 @@ const TYOKALU_KIRJAA = {
               varmuus: { type: "string", enum: ["korkea", "keskitaso", "matala"] },
             },
             required: ["aihe", "rtKortti", "lakipykala", "kuvaus", "varmuus"],
+            additionalProperties: false,
           },
         },
       },
       required: ["havainto", "ehdotukset"],
+      additionalProperties: false,
     },
   };
 
@@ -257,12 +262,44 @@ async function kutsuAnthropic(
   return (await vastaus.json()) as AnthropicVastaus;
 }
 
+const VUOTANUT_MERKINTA_RE = /<\/havainto>|<\/?parameter\b/;
+const VUOTANUT_EHDOTUKSET_RE = /<parameter name="ehdotukset">\s*(\[[\s\S]*\])/;
+
+/**
+ * Malli kirjoittaa joskus työkalukutsun parametrit tekstinä havainto-kentän
+ * sisään ("…</havainto> <parameter name="ehdotukset">[…]"), jolloin varsinainen
+ * ehdotukset-kenttä jää tyhjäksi. Erottaa tällöin havainnon ja poimii
+ * ehdotukset tekstistä, jotta tunnistettuja virheitä ei hukata.
+ */
+export function korjaaVuotanutHavainto(
+  havainto: string,
+  ehdotukset: unknown,
+): { havainto: string; ehdotukset: unknown } {
+  const kohta = havainto.search(VUOTANUT_MERKINTA_RE);
+  if (kohta === -1) return { havainto, ehdotukset };
+
+  let poimitut: unknown = ehdotukset;
+  const osuma = havainto.slice(kohta).match(VUOTANUT_EHDOTUKSET_RE);
+  if (osuma && (!Array.isArray(ehdotukset) || ehdotukset.length === 0)) {
+    try {
+      poimitut = JSON.parse(osuma[1]);
+    } catch {
+      // Jäsentymätön loppuosa — pidetään alkuperäiset ehdotukset.
+    }
+  }
+  return { havainto: havainto.slice(0, kohta), ehdotukset: poimitut };
+}
+
 function jasennaLopputulos(tyokaluKutsu: AnthropicSisaltolohko): RtAnalyysi {
   if (typeof tyokaluKutsu.input !== "object" || tyokaluKutsu.input === null) {
     throw new Error("RT-analyysi ei palauttanut tulosta");
   }
-  const { havainto, ehdotukset } = tyokaluKutsu.input as Record<string, unknown>;
-  if (typeof havainto !== "string" || havainto.trim().length === 0) {
+  const syote = tyokaluKutsu.input as Record<string, unknown>;
+  if (typeof syote.havainto !== "string") {
+    throw new Error("RT-analyysi ei palauttanut havaintoa");
+  }
+  const { havainto, ehdotukset } = korjaaVuotanutHavainto(syote.havainto, syote.ehdotukset);
+  if (havainto.trim().length === 0) {
     throw new Error("RT-analyysi ei palauttanut havaintoa");
   }
   const siivotutEhdotukset = Array.isArray(ehdotukset)
