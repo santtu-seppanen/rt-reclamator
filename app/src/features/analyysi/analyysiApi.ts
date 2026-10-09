@@ -84,6 +84,28 @@ export async function haeRtKortinSisalto(tunnus: string): Promise<RtKorttiVastau
 }
 
 /**
+ * Lataa RT-kortin alkuperäisen PDF:n Workerin kautta (GET /rt-kortti/pdf).
+ * Worker välimuistittaa PDF:n, joten kortistosta ladataan sama kortti vain
+ * kerran. Fetch eikä suora linkki, koska pyyntö vaatii salasanaheaderin.
+ */
+export async function lataaRtKortinPdf(tunnus: string): Promise<Blob> {
+  const url = `${import.meta.env.VITE_API_URL}/rt-kortti/pdf?tunnus=${encodeURIComponent(tunnus)}`;
+
+  const vastaus = await fetch(url, {
+    headers: {
+      "X-Jaettu-Salasana": import.meta.env.VITE_JAETTU_SALASANA,
+    },
+  });
+
+  if (!vastaus.ok) {
+    const data = (await vastaus.json().catch(() => null)) as { error: string } | null;
+    throw new Error(data?.error ?? "PDF:n lataus epäonnistui");
+  }
+
+  return vastaus.blob();
+}
+
+/**
  * Pyytää Workerilta (POST /reklamaatio) tekoälyn kirjoittaman
  * reklamaatioluonnoksen valituista ehdotuksista.
  */

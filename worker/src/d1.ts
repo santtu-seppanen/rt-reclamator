@@ -165,22 +165,86 @@ export async function tallennaHakemistoRivit(db: D1Database, rivit: HakemistoKor
 export interface HakemistoHakutulos {
   tunnus: string;
   otsikko: string;
+  tyyppi: string | null;
 }
 
-/** Nopea tunnus+nimi-haku hakemistosta — malli käyttää tätä kesken /analysoi:ta (ks. rtAnalyysi.ts). */
+/**
+ * Pilkkoo hakusanan erillisiksi hakuehdoiksi. Pitkät sanat lyhennetään
+ * alkuosaansa, jotta suomen taivutusmuodot osuvat toisiinsa ("märkätilan" ~
+ * "Märkätilojen"). Numeroita sisältäviä osia (tunnuksen osat, esim.
+ * "84-11166") ei lyhennetä.
+ */
+export function hakusananOsat(hakusana: string): string[] {
+  const sanat = hakusana
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}-]+/u)
+    .filter((sana) => sana.length >= 3);
+  const osat = sanat.map((sana) => (/\d/.test(sana) || sana.length <= 6 ? sana : sana.slice(0, 6)));
+  return [...new Set(osat)].slice(0, 6);
+}
+
+/**
+ * Nopea tunnus+nimi-haku hakemistosta — malli käyttää tätä kesken /analysoi:ta
+ * (ks. rtAnalyysi.ts). Jokainen hakusanan sana haetaan erikseen ja tulokset
+ * järjestetään osuneiden sanojen määrän mukaan, ohje- ja säännöskortit ennen
+ * valmistajien tuotekortteja.
+ */
 export async function hakemistohaku(db: D1Database, hakusana: string, raja = 8): Promise<HakemistoHakutulos[]> {
-  const kysely = `%${hakusana}%`;
+  const osat = hakusananOsat(hakusana);
+  if (osat.length === 0) return [];
+
+  // SQLiten LIKE ei tee kirjainkoon muunnosta ASCII:n ulkopuolella (Ä/ä, Ö/ö),
+  // joten otsikkoa verrataan sekä pien- että isoalkukirjaimiseen muotoon.
+  const ehdot: string[] = [];
+  const parametrit: string[] = [];
+  for (const osa of osat) {
+    ehdot.push("(CASE WHEN tunnus LIKE ? OR otsikko LIKE ? OR otsikko LIKE ? THEN 1 ELSE 0 END)");
+    parametrit.push(`%${osa}%`, `%${osa}%`, `%${osa[0].toUpperCase()}${osa.slice(1)}%`);
+  }
+  const pisteet = ehdot.join(" + ");
+
   const { results } = await db
-    .prepare("SELECT tunnus, otsikko FROM rt_kortti_hakemisto WHERE tunnus LIKE ?1 OR otsikko LIKE ?1 LIMIT ?2")
-    .bind(kysely, raja)
+    .prepare(
+      `SELECT tunnus, otsikko, tyyppi FROM (
+         SELECT tunnus, otsikko, tyyppi, julkaistu, ${pisteet} AS pisteet FROM rt_kortti_hakemisto
+       )
+       WHERE pisteet > 0
+       ORDER BY pisteet DESC,
+         CASE tyyppi WHEN 'ohjekortti' THEN 0 WHEN 'säännöskortti' THEN 1 ELSE 2 END,
+         julkaistu DESC
+       LIMIT ?`,
+    )
+    .bind(...parametrit, raja)
     .all<HakemistoHakutulos>();
   return results;
 }
 
-/** Onko tunnus oikeasti olemassa hakemistossa (eli kortistossa) — käytetään hallusinaatiosuodatukseen. */
-export async function onkoRtKorttiHakemistossa(db: D1Database, tunnus: string): Promise<boolean> {
-  const rivi = await db.prepare("SELECT 1 FROM rt_kortti_hakemisto WHERE tunnus = ?").bind(tunnus).first();
-  return rivi !== null;
+interface HakemistoRivi {
+  tunnus: string;
+  otsikko: string;
+  tyyppi: string | null;
+  julkaistu: string | null;
+  content_id: string | null;
+}
+
+/**
+ * Kortin metatiedot hakemistosta, tai null jos tunnusta ei ole oikeasti
+ * olemassa kortistossa — käytetään hallusinaatiosuodatukseen ja PDF-latauksen
+ * content_id:n selvittämiseen ilman kortiston hakusivun kutsua.
+ */
+export async function haeHakemistoKortti(db: D1Database, tunnus: string): Promise<HakemistoKortti | null> {
+  const rivi = await db
+    .prepare("SELECT tunnus, otsikko, tyyppi, julkaistu, content_id FROM rt_kortti_hakemisto WHERE tunnus = ?")
+    .bind(tunnus)
+    .first<HakemistoRivi>();
+  if (!rivi) return null;
+  return {
+    tunnus: rivi.tunnus,
+    otsikko: rivi.otsikko,
+    tyyppi: rivi.tyyppi,
+    julkaistu: rivi.julkaistu,
+    contentId: rivi.content_id,
+  };
 }
 
 export async function hakemistonKoko(db: D1Database): Promise<number> {

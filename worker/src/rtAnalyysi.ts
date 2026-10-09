@@ -1,8 +1,18 @@
 import { paattelSisaltotyyppi } from "./r2.js";
 
+/** Hakemistosta liitetyt metatiedot vahvistetulle RT-kortille (ks. index.ts:n varmistaRtKortit). */
+export interface RtKorttiTiedot {
+  tunnus: string;
+  otsikko: string;
+  tyyppi: string | null;
+  julkaistu: string | null;
+}
+
 export interface RtEhdotus {
   aihe: string;
   rtKortti: string | null;
+  /** Puuttuu vanhoilta analyyseilta, jotka tallennettiin ennen metatietojen liittämistä. */
+  rtKorttiTiedot?: RtKorttiTiedot | null;
   lakipykala: string | null;
   kuvaus: string;
   varmuus: "korkea" | "keskitaso" | "matala";
@@ -24,7 +34,7 @@ export type AnalyysiTila = "nopea" | "taydellinen";
 /** Mallin käytössä olevat apuvälineet RT-korttitunnuksen varmistamiseen kesken analyysin. */
 export interface RtAnalyysiTyokalut {
   /** Nopea tunnus+nimi-haku hakemistosta (D1, ei ulkoista kutsua). */
-  haeHakemistosta: (hakusana: string) => Promise<{ tunnus: string; otsikko: string }[]>;
+  haeHakemistosta: (hakusana: string) => Promise<{ tunnus: string; otsikko: string; tyyppi: string | null }[]>;
   /** Hitaampi koko kortin tiivistelmän haku - kirjautuu tarvittaessa kortistoon. */
   haeKortinTiivistelma: (tunnus: string) => Promise<string | null>;
 }
@@ -115,6 +125,7 @@ interface AnthropicSisaltolohko {
 
 interface AnthropicVastaus {
   content: AnthropicSisaltolohko[];
+  stop_reason?: string;
 }
 
 function siivoaEhdotus(raaka: unknown): RtEhdotus | null {
@@ -180,7 +191,10 @@ const TYOKALU_KIRJAA = {
 
 const TYOKALU_HAKU = {
   name: HAKU_TYOKALU_NIMI,
-  description: "Hakee RT-korttien tunnus+nimi-hakemistosta hakusanalla. Palauttaa enintään muutaman osuman.",
+  description:
+    "Hakee RT-korttien tunnus+nimi-hakemistosta. Anna 1-4 lyhyttä avainsanaa (esim. \"märkätila vedeneristys\") tai " +
+    "korttitunnus; jokainen sana haetaan erikseen otsikoista. Palauttaa enintään 8 osumaa tyyppeineen, " +
+    "ohje- ja säännöskortit ennen valmistajien tuotekortteja. Kokeile tarvittaessa uudelleen eri sanoilla.",
   input_schema: {
     type: "object",
     properties: { hakusana: { type: "string" } },
@@ -219,7 +233,9 @@ async function kutsuAnthropic(
     },
     body: JSON.stringify({
       model: MALLI,
-      max_tokens: 1500,
+      // Malli käyttää osan budjetista ajatteluun ennen lopullista työkalukutsua;
+      // 1500 katkaisi kirjauksen kesken niin, että ehdotukset-kenttä puuttui.
+      max_tokens: 8000,
       system: rakennaSysteemikehote(tila),
       messages,
       tools: rakennaTyokalut(tila),
@@ -287,6 +303,11 @@ export async function analysoiRemontti(
     const tyokaluKutsut = vastaus.content.filter((lohko) => lohko.type === "tool_use");
     const kirjausKutsu = tyokaluKutsut.find((k) => k.name === TYOKALU_NIMI);
     if (kirjausKutsu) {
+      // Katkennut työkalukutsu voi olla jäsennettävä mutta vajaa (esim. ilman
+      // ehdotuksia) — virhe on parempi kuin hiljaa tallennettu tyhjä analyysi.
+      if (vastaus.stop_reason === "max_tokens") {
+        throw new Error("RT-analyysin vastaus katkesi max_tokens-rajaan");
+      }
       return jasennaLopputulos(kirjausKutsu);
     }
 

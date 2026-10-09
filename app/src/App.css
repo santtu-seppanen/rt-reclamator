@@ -327,6 +327,12 @@ body {
   color: var(--vari-aksentti);
 }
 
+.ehdotus-kortti-tiedot {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: var(--vari-teksti-himmea);
+}
+
 .ehdotus-kuvaus {
   margin: 0;
   color: var(--vari-teksti);
@@ -349,7 +355,7 @@ body {
 
 .ehdotus-toiminnot {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 0.3rem;
 }
@@ -461,6 +467,10 @@ body {
   margin: 0;
   font-size: 0.85rem;
   color: var(--vari-teksti-himmea);
+}
+
+.ehdotus-toiminnot .lomake-virhe {
+  flex-basis: 100%;
 }
 
 .rt-kortti-nappi {

@@ -30,3 +30,19 @@ export function poistaKuva(bucket: R2Bucket, tiedostonimi: string): Promise<void
 export function haeKuva(bucket: R2Bucket, tiedostonimi: string): Promise<R2ObjectBody | null> {
   return bucket.get(tiedostonimi);
 }
+
+// RT-korttien PDF:t samassa bucketissa omalla etuliitteellään. GET /kuvat/*
+// hylkää "/"-merkkiä sisältävät avaimet, joten näitä ei voi hakea sen kautta
+// ilman jaettua salasanaa.
+function rtPdfAvain(contentId: string): string {
+  return `rt-kortit/${contentId}.pdf`;
+}
+
+export async function haeRtPdf(bucket: R2Bucket, contentId: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  const objekti = await bucket.get(rtPdfAvain(contentId));
+  return objekti ? new Uint8Array(await objekti.arrayBuffer()) : null;
+}
+
+export async function tallennaRtPdf(bucket: R2Bucket, contentId: string, pdfTavut: Uint8Array): Promise<void> {
+  await bucket.put(rtPdfAvain(contentId), pdfTavut, { httpMetadata: { contentType: "application/pdf" } });
+}

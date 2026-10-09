@@ -229,25 +229,19 @@ export async function haeHakemistoSivu(evasteet: Evasteet, sivu: number): Promis
   return { kortit, sivu: data.pagination.page, sivujaYhteensa: data.pagination.pages_count };
 }
 
-export interface RtKortinSisalto {
-  otsikko: string;
-  pdfTavut: Uint8Array;
-}
-
-/** Hakee yhden kortin PDF-sisällön tunnuksen (esim. "RT 85-11253") perusteella. */
-export async function haeKortinSisalto(evasteet: Evasteet, tunnus: string): Promise<RtKortinSisalto | null> {
-  const data = await haeHakutulossivu(evasteet, tunnus, 1);
-  const osuma = data?.products.find((p) => p.CardReferenceCode === tunnus);
-  if (!osuma || !osuma.contentId) return null;
-
-  const { vastaus: pdfVastaus } = await seuraaUudelleenohjaukset(`${BASE}/api/content/${osuma.contentId}`, evasteet, {
+/**
+ * Hakee kortin PDF:n suoraan hakemistoon tallennetulla content_id:llä — ei
+ * hakusivun kutsua välissä. null jos lisenssi ei kata korttia tai vastaus ei
+ * ole PDF.
+ */
+export async function haeKortinPdf(evasteet: Evasteet, contentId: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  const { vastaus } = await seuraaUudelleenohjaukset(`${BASE}/api/content/${encodeURIComponent(contentId)}`, evasteet, {
     method: "GET",
   });
-  if (!pdfVastaus.ok || !(pdfVastaus.headers.get("Content-Type") ?? "").toLowerCase().includes("pdf")) {
+  if (!vastaus.ok || !(vastaus.headers.get("Content-Type") ?? "").toLowerCase().includes("pdf")) {
     return null;
   }
-  const pdfTavut = new Uint8Array(await pdfVastaus.arrayBuffer());
-  return { otsikko: osuma.ProductName ?? tunnus, pdfTavut };
+  return new Uint8Array(await vastaus.arrayBuffer());
 }
 
 interface AnthropicSisaltolohko {

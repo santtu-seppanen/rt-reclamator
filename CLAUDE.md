@@ -109,7 +109,10 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     tarvitse hakea/kirjautua/tiivistää uudelleen.
   - **Cloudflare R2** — itse kuvatiedostot. Worker tarjoilee ne
     `GET /kuvat/:tiedostonimi`-reitin kautta, joten frontend rakentaa
-    kuvan URL:n `${VITE_API_URL}/kuvat/<tiedosto>`.
+    kuvan URL:n `${VITE_API_URL}/kuvat/<tiedosto>`. Samassa bucketissa
+    myös RT-korttien PDF-välimuisti avaimella `rt-kortit/<content_id>.pdf`
+    — `/kuvat/` hylkää `/`-merkkiä sisältävät avaimet, joten PDF:t ovat
+    saatavilla vain salasanalla suojatun `GET /rt-kortti/pdf`:n kautta.
   - **Anthropic API** (Claude, kuvantulkinta ja RT-korttien tiivistys) —
     `worker/src/rtAnalyysi.ts` ja `worker/src/rtKortisto.ts` kutsuvat sitä
     suoraan `fetch`:illä (ei SDK-riippuvuutta) pakotetulla
@@ -145,10 +148,16 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     `rt_kortit`-taulusta (jos löytyy, palauttaa sen heti eikä kutsu mitään
     ulkoista palvelua). Jos ei löydy: kirjautuu kortistot.rakennustieto.fi:hin
     (`rtKortisto.ts`:n `kirjaudu`), hakee kortin PDF-sisällön
-    (`haeKortinSisalto`), pyytää siitä suomenkielisen tiivistelmän
+    (`index.ts`:n `haeTaiLataaPdf`, ks. `/rt-kortti/pdf`), pyytää siitä suomenkielisen tiivistelmän
     Anthropic-API:lta (`tiivistaRtKortti`) ja tallentaa tuloksen
     `rt_kortit`-tauluun ennen palautusta. 404 jos tunnusta ei löydy tai
     lisenssi ei kata sitä.
+  - `GET /rt-kortti/pdf?tunnus=<tunnus>` — jaettu salasana; palauttaa
+    kortin alkuperäisen PDF:n ladattavaksi ("Lataa PDF" -nappi
+    `EhdotusLista.tsx`:ssä). Vain hakemistossa olevat tunnukset: PDF
+    haetaan suoraan hakemiston `content_id`:llä (ei kortiston hakusivua) ja
+    tallennetaan R2:een, joten sama kortti ladataan kortistosta vain kerran.
+    Myös `GET /rt-kortti`:n tiivistys käyttää tätä samaa PDF-välimuistia.
   - `POST /rt-kortti-hakemisto/paivita?sivu=1&maara=20` — rakentaa/päivittää
     `rt_kortti_hakemisto`-taulun (tunnus, otsikko, tyyppi, julkaistu,
     content_id): kirjautuu ja hakee `maara` sivua laajalla `"*"`-haulla
@@ -160,7 +169,10 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     jokaisen ehdotuksen `rtKortti`-tunnuksen tätä taulua vasten
     (`varmistaRtKortit` `index.ts`:ssä) ja tyhjentää sen jos tunnusta ei
     löydy — malli ei siis voi enää näyttää hallusinoitua RT-korttinumeroa
-    todellisena käyttäjälle, vaikka se itse "uskoisi" siihen. Aja tämä
+    todellisena käyttäjälle, vaikka se itse "uskoisi" siihen. Samalla haulla
+    ehdotukseen liitetään kortin metatiedot (`rtKorttiTiedot`: otsikko,
+    tyyppi, julkaistu), jotka tallentuvat analyysin mukana — frontend näyttää
+    ne ilman erillistä hakua. Aja tämä
     hakemistopäivitys aina käyttöönoton yhteydessä (tyhjä hakemisto = kaikki
     ehdotusten korttitunnukset tyhjenevät) ja satunnaisesti myöhemmin
     kortiston sisällön muuttuessa — ei toistaiseksi ajastettu automaattisesti.

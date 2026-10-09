@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { RtEhdotus, RtKorttiVastaus, Varmuus } from "./types";
-import { haeRtKortinSisalto } from "./analyysiApi";
+import { haeRtKortinSisalto, lataaRtKortinPdf } from "./analyysiApi";
 import { Modaali } from "../../lib/Modaali";
 import { Reklamaatio } from "./Reklamaatio";
 
@@ -24,6 +24,7 @@ export function EhdotusLista({ kuvaId, havainto, ehdotukset }: EhdotusListaProps
   const [valimuisti, setValimuisti] = useState<Record<string, RtKorttiVastaus>>({});
   const [avoinTunnus, setAvoinTunnus] = useState<string | null>(null);
   const [lataaTunnus, setLataaTunnus] = useState<string | null>(null);
+  const [lataaPdfTunnus, setLataaPdfTunnus] = useState<string | null>(null);
   const [virheTunnus, setVirheTunnus] = useState<Record<string, string>>({});
 
   async function haeKortti(tunnus: string) {
@@ -53,6 +54,32 @@ export function EhdotusLista({ kuvaId, havainto, ehdotukset }: EhdotusListaProps
     }
   }
 
+  async function lataaPdf(tunnus: string) {
+    setLataaPdfTunnus(tunnus);
+    setVirheTunnus((edelliset) => {
+      const uudet = { ...edelliset };
+      delete uudet[tunnus];
+      return uudet;
+    });
+
+    try {
+      const pdf = await lataaRtKortinPdf(tunnus);
+      const objektiUrl = URL.createObjectURL(pdf);
+      const linkki = document.createElement("a");
+      linkki.href = objektiUrl;
+      linkki.download = `${tunnus}.pdf`;
+      linkki.click();
+      setTimeout(() => URL.revokeObjectURL(objektiUrl), 60_000);
+    } catch (virhe) {
+      setVirheTunnus((edelliset) => ({
+        ...edelliset,
+        [tunnus]: virhe instanceof Error ? virhe.message : "PDF:n lataus epäonnistui",
+      }));
+    } finally {
+      setLataaPdfTunnus(null);
+    }
+  }
+
   const avoinKortti = avoinTunnus ? valimuisti[avoinTunnus] : null;
 
   return (
@@ -73,6 +100,15 @@ export function EhdotusLista({ kuvaId, havainto, ehdotukset }: EhdotusListaProps
                 {ehdotus.rtKortti && (
                   <span className="ehdotus-koodi">RT-kortti: {ehdotus.rtKortti}</span>
                 )}
+                {ehdotus.rtKorttiTiedot && (
+                  <span className="ehdotus-kortti-tiedot">
+                    {ehdotus.rtKorttiTiedot.otsikko}
+                    {[ehdotus.rtKorttiTiedot.tyyppi, ehdotus.rtKorttiTiedot.julkaistu?.slice(0, 4)]
+                      .filter(Boolean)
+                      .map((tieto) => ` · ${tieto}`)
+                      .join("")}
+                  </span>
+                )}
                 {ehdotus.lakipykala && (
                   <span className="ehdotus-koodi ehdotus-lakipykala">Laki: {ehdotus.lakipykala}</span>
                 )}
@@ -86,6 +122,14 @@ export function EhdotusLista({ kuvaId, havainto, ehdotukset }: EhdotusListaProps
                     onClick={() => haeKortti(ehdotus.rtKortti!)}
                   >
                     {lataaTunnus === ehdotus.rtKortti ? "Haetaan…" : "Hae kortin sisältö"}
+                  </button>
+                  <button
+                    type="button"
+                    className="nappi nappi-toissijainen rt-kortti-nappi"
+                    disabled={lataaPdfTunnus === ehdotus.rtKortti}
+                    onClick={() => lataaPdf(ehdotus.rtKortti!)}
+                  >
+                    {lataaPdfTunnus === ehdotus.rtKortti ? "Ladataan…" : "Lataa PDF"}
                   </button>
                   {virheTunnus[ehdotus.rtKortti] && (
                     <p className="lomake-virhe">{virheTunnus[ehdotus.rtKortti]}</p>

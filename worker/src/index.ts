@@ -4,7 +4,7 @@ import {
   haeRtKortti,
   tallennaRtKortti,
   tallennaHakemistoRivit,
-  onkoRtKorttiHakemistossa,
+  haeHakemistoKortti,
   hakemistonKoko,
   hakemistohaku,
   haeKuvaIdlla,
@@ -14,12 +14,12 @@ import {
   haeReklamaatio,
 } from "./d1.js";
 import type { PalauteArvio } from "./d1.js";
-import { haeKuva, tallennaKuva } from "./r2.js";
+import { haeKuva, tallennaKuva, haeRtPdf, tallennaRtPdf } from "./r2.js";
 import { validoiAnalysoiPyynto, validoiPalautePyynto, validoiReklamaatioPyynto } from "./validointi.js";
 import { kirjoitaReklamaatio } from "./reklamaatio.js";
 import { analysoiRemontti } from "./rtAnalyysi.js";
 import type { RtEhdotus, RtAnalyysiTyokalut } from "./rtAnalyysi.js";
-import { kirjaudu, haeKortinSisalto, tiivistaRtKortti, haeHakemistoSivu } from "./rtKortisto.js";
+import { kirjaudu, haeKortinPdf, tiivistaRtKortti, haeHakemistoSivu } from "./rtKortisto.js";
 
 interface Env {
   DB: D1Database;
@@ -60,6 +60,10 @@ export default {
       return kasitteleAnalysoi(request, env, corsHeaders);
     }
 
+    if (request.method === "GET" && url.pathname === "/rt-kortti/pdf") {
+      return kasitteleRtKortinPdf(request, url, env, corsHeaders);
+    }
+
     if (request.method === "GET" && url.pathname === "/rt-kortti") {
       return kasitteleRtKortti(request, url, env, corsHeaders);
     }
@@ -89,6 +93,11 @@ async function kasitteleKuva(
   env: Env,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
+  // Kuva-avaimissa ei ole "/"-merkkiä; samassa bucketissa olevat RT-kortti-PDF:t
+  // (rt-kortit/…) eivät saa olla haettavissa tätä julkista reittiä pitkin.
+  if (tiedostonimi.includes("/")) {
+    return jsonVastaus({ error: "Kuvaa ei löydy" }, 404, corsHeaders);
+  }
   const objekti = await haeKuva(env.KUVAT, tiedostonimi);
   if (!objekti) {
     return jsonVastaus({ error: "Kuvaa ei löydy" }, 404, corsHeaders);
@@ -315,17 +324,20 @@ async function kasittelePalautteidenHaku(
  * Tarkistaa jokaisen ehdotuksen rtKortti-tunnuksen rt_kortti_hakemisto-taulua
  * vasten (ks. GET /rt-kortti-hakemisto/paivita) ja tyhjentää sen jos tunnusta
  * ei löydy oikeasta kortistosta — malli ei saa koskaan näyttää hallusinoitua
- * RT-korttinumeroa todellisena. Malli saattaa liittää tunnukseen pilkulla
- * erotetun kohdan (esim. "RT 84-11093, kohta 3.2"), joten vain pilkkua
- * edeltävä osa tarkistetaan.
+ * RT-korttinumeroa todellisena. Löytyneen kortin metatiedot (otsikko, tyyppi,
+ * julkaisuaika) liitetään samalla haulla ehdotukseen, jolloin ne tallentuvat
+ * analyysin mukana eikä frontendin tarvitse hakea niitä erikseen. Malli
+ * saattaa liittää tunnukseen pilkulla erotetun kohdan (esim. "RT 84-11093,
+ * kohta 3.2"), joten vain pilkkua edeltävä osa tarkistetaan.
  */
 async function varmistaRtKortit(db: D1Database, ehdotukset: RtEhdotus[]): Promise<RtEhdotus[]> {
   return Promise.all(
     ehdotukset.map(async (ehdotus) => {
-      if (!ehdotus.rtKortti) return ehdotus;
-      const ehdokasTunnus = ehdotus.rtKortti.split(",")[0].trim();
-      const loytyy = await onkoRtKorttiHakemistossa(db, ehdokasTunnus);
-      return loytyy ? ehdotus : { ...ehdotus, rtKortti: null };
+      if (!ehdotus.rtKortti) return { ...ehdotus, rtKorttiTiedot: null };
+      const kortti = await haeHakemistoKortti(db, ehdotus.rtKortti.split(",")[0].trim());
+      if (!kortti) return { ...ehdotus, rtKortti: null, rtKorttiTiedot: null };
+      const { tunnus, otsikko, tyyppi, julkaistu } = kortti;
+      return { ...ehdotus, rtKorttiTiedot: { tunnus, otsikko, tyyppi, julkaistu } };
     }),
   );
 }
@@ -387,8 +399,28 @@ async function kasitteleHakemistonPaivitys(
 }
 
 /**
+ * Hakee kortin PDF:n: ensin R2-välimuistista, muuten kirjautuu kortistoon ja
+ * lataa sen suoraan hakemiston content_id:llä (ei hakusivun kutsua) ja
+ * tallentaa R2:een, jotta samaa korttia ei ladata kortistosta toista kertaa.
+ * null jos tunnusta ei ole hakemistossa tai lisenssi ei kata korttia.
+ */
+async function haeTaiLataaPdf(env: Env, tunnus: string): Promise<{ otsikko: string; pdfTavut: Uint8Array<ArrayBuffer> } | null> {
+  const kortti = await haeHakemistoKortti(env.DB, tunnus);
+  if (!kortti?.contentId) return null;
+
+  const valimuistista = await haeRtPdf(env.KUVAT, kortti.contentId);
+  if (valimuistista) return { otsikko: kortti.otsikko, pdfTavut: valimuistista };
+
+  const evasteet = await kirjaudu(env.RAKENNUSTIETO_USERNAME, env.RAKENNUSTIETO_PASSWORD);
+  const pdfTavut = await haeKortinPdf(evasteet, kortti.contentId);
+  if (!pdfTavut) return null;
+  await tallennaRtPdf(env.KUVAT, kortti.contentId, pdfTavut);
+  return { otsikko: kortti.otsikko, pdfTavut };
+}
+
+/**
  * Hakee RT-kortin tiivistelmän tunnuksella — D1-välimuistista jos kortti on jo
- * kerran haettu, muuten kirjautuu kortistoon, hakee PDF:n ja tiivistää sen
+ * kerran tiivistetty, muuten tiivistää kortin PDF:n (haeTaiLataaPdf)
  * Anthropic-API:lla ennen tallennusta. Jaettu sekä GET /rt-kortti -reitin
  * että /analysoi:n hae_rt_kortin_sisalto-työkalun käyttöön (ks. rtAnalyysi.ts).
  */
@@ -396,12 +428,51 @@ async function haeTaiTiivistaKortti(env: Env, tunnus: string): Promise<{ otsikko
   const valimuistista = await haeRtKortti(env.DB, tunnus);
   if (valimuistista) return valimuistista;
 
-  const evasteet = await kirjaudu(env.RAKENNUSTIETO_USERNAME, env.RAKENNUSTIETO_PASSWORD);
-  const kortti = await haeKortinSisalto(evasteet, tunnus);
+  const kortti = await haeTaiLataaPdf(env, tunnus);
   if (!kortti) return null;
 
   const tiivistelma = await tiivistaRtKortti(env.ANTHROPIC_API_KEY, tunnus, kortti.otsikko, kortti.pdfTavut);
   return tallennaRtKortti(env.DB, tunnus, kortti.otsikko, tiivistelma);
+}
+
+/**
+ * Palauttaa RT-kortin alkuperäisen PDF:n ladattavaksi (GET /rt-kortti/pdf?tunnus=…).
+ * Jaettu salasana kuten /rt-kortti:ssa. PDF välimuistitetaan R2:een
+ * ensimmäisellä latauksella (ks. haeTaiLataaPdf).
+ */
+async function kasitteleRtKortinPdf(
+  request: Request,
+  url: URL,
+  env: Env,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  if (request.headers.get("X-Jaettu-Salasana") !== env.JAETTU_SALASANA) {
+    return jsonVastaus({ error: "Virheellinen salasana" }, 401, corsHeaders);
+  }
+
+  const tunnus = url.searchParams.get("tunnus")?.split(",")[0].trim();
+  if (!tunnus) {
+    return jsonVastaus({ error: "tunnus-parametri on pakollinen" }, 400, corsHeaders);
+  }
+
+  try {
+    const kortti = await haeTaiLataaPdf(env, tunnus);
+    if (!kortti) {
+      return jsonVastaus({ error: "Korttia ei löytynyt tai ei lisenssiä sen sisältöön" }, 404, corsHeaders);
+    }
+    return new Response(kortti.pdfTavut, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${tunnus.replace(/[^\w .-]/g, "_")}.pdf"`,
+        "Cache-Control": "private, max-age=86400",
+        ...corsHeaders,
+      },
+    });
+  } catch (virhe) {
+    console.error(virhe);
+    return jsonVastaus({ error: "RT-kortin PDF:n haku epäonnistui" }, 502, corsHeaders);
+  }
 }
 
 /**

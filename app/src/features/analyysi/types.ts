@@ -1,8 +1,19 @@
 export type Varmuus = "korkea" | "keskitaso" | "matala";
 
+/** Kortin metatiedot RT-kortiston hakemistosta, liitetty jo analyysin vastaukseen. */
+export interface RtKorttiTiedot {
+  tunnus: string;
+  otsikko: string;
+  tyyppi: string | null;
+  /** Julkaisupäivä muodossa VVVV-KK-PP. */
+  julkaistu: string | null;
+}
+
 export interface RtEhdotus {
   aihe: string;
   rtKortti: string | null;
+  /** Puuttuu vanhoilta analyyseilta, jotka tallennettiin ennen metatietojen liittämistä. */
+  rtKorttiTiedot?: RtKorttiTiedot | null;
   lakipykala: string | null;
   kuvaus: string;
   varmuus: Varmuus;
