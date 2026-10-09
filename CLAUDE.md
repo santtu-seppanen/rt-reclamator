@@ -136,7 +136,7 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
     arkaluontoista dataa.
   - `GET /kuvat/:tiedostonimi` — striimaa kuvan R2:sta oikealla
     `Content-Type`-headerilla.
-  - `POST /analysoi` — validoi pyynnön (`worker/src/validointi.ts`:
+  - `POST /analysoi` — ("nopea" = Claude Haiku 4.5, "taydellinen" = Claude Sonnet 5, `rtAnalyysi.ts`:n `MALLIT`) validoi pyynnön (`worker/src/validointi.ts`:
     tekijä, valinnainen muistiinpano, valinnainen lat+lng-pari, kuva),
     tarkistaa jaetun salasanan (`X-Jaettu-Salasana`-header — karsii
     botteja/väärinkäyttöä maksullisesta Anthropic-kutsusta, ei oikea

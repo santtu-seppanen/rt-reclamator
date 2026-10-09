@@ -40,7 +40,12 @@ export interface RtAnalyysiTyokalut {
 }
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const MALLI = "claude-sonnet-5";
+// "nopea" käyttää pienempää, nopeampaa mallia (ei ajattelua oletuksena);
+// "taydellinen" ajattelevaa Sonnetia.
+const MALLIT: Record<AnalyysiTila, string> = {
+  nopea: "claude-haiku-4-5",
+  taydellinen: "claude-sonnet-5",
+};
 const TYOKALU_NIMI = "kirjaa_rt_ehdotukset";
 const HAKU_TYOKALU_NIMI = "hae_rt_kortteja_hakemistosta";
 const SISALTO_TYOKALU_NIMI = "hae_rt_kortin_sisalto";
@@ -232,7 +237,7 @@ async function kutsuAnthropic(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: MALLI,
+      model: MALLIT[tila],
       // Malli käyttää osan budjetista ajatteluun ennen lopullista työkalukutsua;
       // 1500 katkaisi kirjauksen kesken niin, että ehdotukset-kenttä puuttui.
       max_tokens: 8000,
