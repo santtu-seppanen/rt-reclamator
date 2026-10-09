@@ -25,15 +25,18 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   osana itse analyysiä, jos ne parantavat ehdotuksen laatua. Enintään 4
   keskustelukierrosta per analyysi, viimeinen pakottaa lopullisen
   vastauksen — pitää kokonaiskeston hallittuna vaikka malli käyttäisi
-  työkaluja. Käyttäjä valitsee itse painotuksen kahdella napilla
-  ("Nopea analyysi" / "Täydellinen analyysi", `Etusivu.tsx`), jotka
-  lähettävät `POST /analysoi`:lle kentän `tila: "nopea" | "taydellinen"`
-  (`rtAnalyysi.ts`:n `AnalyysiTila`; puuttuessaan oletus on
-  "taydellinen"). "nopea" jättää hitaan sisällönhakutyökalun kokonaan
-  pois tarjolta (vastaus tyypillisesti muutamassa sekunnissa), koska
-  Anthropic ei voi kutsua työkalua jota ei ole `tools`-listassa —
-  "taydellinen" tarjoaa molemmat ja voi siksi joskus kestää
-  kymmeniä sekunteja. Molemmissa RT-korttitunnus on silti aina joko
+  työkaluja. Lomakkeen "Analysoi"-nappi tekee aina ensin nopean analyysin
+  (`tila: "nopea"`, `rtAnalyysi.ts`:n `AnalyysiTila`; puuttuessaan
+  oletus on "taydellinen"). Tuloksen alla on "Täydellinen analyysi"
+  -nappi (`Etusivu.tsx`), joka lähettää `POST /analysoi`:lle
+  `pohjaAnalyysiId`:n kuvan sijaan: Worker lukee kuvan ja lisätiedon
+  pohja-analyysista (R2/D1) ja antaa nopean tuloksen mallille
+  lähtökohdaksi tarkistettavaksi. Täydellinen tallentuu omana rivinään
+  samaan kuvatiedostoon, ja käyttäjä voi palata nopeaan tulokseen
+  ("Takaisin nopeaan analyysiin"). "nopea" jättää hitaan
+  sisällönhakutyökalun pois tarjolta ja ajattelee matalalla effortilla
+  (~20-25 s), koska Anthropic ei voi kutsua työkalua jota ei ole
+  `tools`-listassa — "taydellinen" tarjoaa molemmat ja kestää ~40-60 s. Molemmissa RT-korttitunnus on silti aina joko
   oikea tai tyhjä (ks. alla).
 - **Ehdotukset (`POST /analysoi`) ovat tekoälyn arvioita kuvasta, eivät
   lakineuvontaa.** Mallilla ei ole lakimieskoulutusta — se antaa tarkan

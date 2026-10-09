@@ -73,8 +73,35 @@ describe("validoiAnalysoiPyynto", () => {
 
     expect(tulos.ok).toBe(true);
     if (tulos.ok) {
-      expect(tulos.pyynto.kuva.tiedostopaate).toBe("jpg");
+      expect(tulos.pyynto.kuva?.tiedostopaate).toBe("jpg");
     }
+  });
+
+  describe("pohjaAnalyysiId (täydellinen analyysi nopean jatkoksi)", () => {
+    it("hyväksyy ilman kuvaa ja pakottaa tilan täydelliseksi", () => {
+      const tulos = validoiAnalysoiPyynto({ tekija: "Matti", pohjaAnalyysiId: "abc-123" });
+
+      expect(tulos.ok).toBe(true);
+      if (tulos.ok) {
+        expect(tulos.pyynto.pohjaAnalyysiId).toBe("abc-123");
+        expect(tulos.pyynto.kuva).toBeNull();
+        expect(tulos.pyynto.tila).toBe("taydellinen");
+      }
+    });
+
+    it("hylkää nopean tilan pohja-analyysin kanssa", () => {
+      const tulos = validoiAnalysoiPyynto({ tekija: "Matti", pohjaAnalyysiId: "abc-123", tila: "nopea" });
+      expect(tulos.ok).toBe(false);
+    });
+
+    it("hylkää tyhjän tai väärän tyyppisen id:n", () => {
+      expect(validoiAnalysoiPyynto({ tekija: "Matti", pohjaAnalyysiId: "  " }).ok).toBe(false);
+      expect(validoiAnalysoiPyynto({ tekija: "Matti", pohjaAnalyysiId: 5 }).ok).toBe(false);
+    });
+
+    it("ilman pohja-analyysia kuva on yhä pakollinen", () => {
+      expect(validoiAnalysoiPyynto({ tekija: "Matti", tila: "taydellinen" }).ok).toBe(false);
+    });
   });
 
   describe("tekija validointi", () => {

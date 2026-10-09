@@ -56,6 +56,37 @@ export async function analysoiKuva(pyynto: AnalysoiPyynto): Promise<Analyysi> {
 }
 
 /**
+ * Tekee täydellisen analyysin aiemman (nopean) analyysin pohjalta. Worker
+ * lukee kuvan ja lisätiedot pohja-analyysista ja antaa nopean tuloksen
+ * mallille lähtökohdaksi, joten kuvaa ei lähetetä uudelleen. Palauttaa uuden,
+ * erillisen analyysin.
+ */
+export async function analysoiTaydellisesti(pohjaAnalyysiId: string, tekija: string): Promise<Analyysi> {
+  const url = `${import.meta.env.VITE_API_URL}/analysoi`;
+
+  const vastaus = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Jaettu-Salasana": import.meta.env.VITE_JAETTU_SALASANA,
+    },
+    body: JSON.stringify({ pohjaAnalyysiId, tekija, tila: "taydellinen" }),
+  });
+
+  const data = (await vastaus.json().catch(() => null)) as
+    | Analyysi
+    | { error: string }
+    | null;
+
+  if (!vastaus.ok || !data || "error" in data) {
+    const virhe = data && "error" in data ? data.error : "Täydellinen analyysi epäonnistui";
+    throw new Error(virhe);
+  }
+
+  return data;
+}
+
+/**
  * Hakee ja tiivistää oikean RT-kortin sisällön kortistosta annetulla
  * tunnuksella (esim. "RT 85-11253"). Worker välimuistittaa vastauksen
  * D1:een, mutta yksittäinen haku voi silti kestää hetken (PDF-haku +

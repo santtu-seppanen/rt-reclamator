@@ -3,6 +3,7 @@ import type { RtEhdotus, RtKorttiVastaus, Varmuus } from "./types";
 import { haeRtKortinSisalto, lataaRtKortinPdf } from "./analyysiApi";
 import { Modaali } from "../../lib/Modaali";
 import { Reklamaatio } from "./Reklamaatio";
+import { jasennaTiivistelma } from "./tiivistelmaLohkot";
 
 const VARMUUS_TEKSTI: Record<Varmuus, string> = {
   korkea: "Korkea varmuus",
@@ -172,7 +173,21 @@ export function EhdotusLista({ kuvaId, havainto, ehdotukset }: EhdotusListaProps
             </button>
             <h2>{avoinKortti.tunnus}</h2>
             <h3>{avoinKortti.otsikko}</h3>
-            <p>{avoinKortti.tiivistelma}</p>
+            <div className="rt-kortti-tiivistelma">
+              {jasennaTiivistelma(avoinKortti.tiivistelma).map((lohko, i) =>
+                lohko.tyyppi === "otsikko" ? (
+                  <h4 key={i}>{lohko.teksti}</h4>
+                ) : lohko.tyyppi === "lista" ? (
+                  <ul key={i}>
+                    {lohko.kohdat.map((kohta, j) => (
+                      <li key={j}>{kohta}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p key={i}>{lohko.teksti}</p>
+                ),
+              )}
+            </div>
             <p className="ehdotus-vastuuvapaus">
               Tekoälyn tiivistelmä kortin sisällöstä, ei sanasta sanaan kortin teksti — varmista
               yksityiskohdat ja lakipykälät itse kortista tai asiantuntijalta.

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { KuvaKentta } from "./KuvaKentta";
 import { EhdotusLista } from "./EhdotusLista";
-import { analysoiKuva } from "./analyysiApi";
+import { analysoiKuva, analysoiTaydellisesti } from "./analyysiApi";
 import type { Analyysi } from "./types";
 import { haeTekijanNimi, tallennaTekijanNimi } from "../../lib/tekijanNimi";
 import { haeNykyinenSijaintiKerran } from "../../lib/geolocation";
@@ -20,7 +20,11 @@ export function Etusivu() {
   const [sijaintiTila, setSijaintiTila] = useState<"idle" | "haetaan" | "virhe">("idle");
   const [lahetetaan, setLahetetaan] = useState<"nopea" | "taydellinen" | null>(null);
   const [virhe, setVirhe] = useState<string | null>(null);
-  const [tulos, setTulos] = useState<Analyysi | null>(null);
+  // Ensin aina nopea analyysi; täydellinen tehdään sen pohjalta napista ja
+  // käyttäjä voi vaihtaa takaisin nopeaan tulokseen.
+  const [nopeaTulos, setNopeaTulos] = useState<Analyysi | null>(null);
+  const [taydellinenTulos, setTaydellinenTulos] = useState<Analyysi | null>(null);
+  const [naytettava, setNaytettava] = useState<"nopea" | "taydellinen">("nopea");
 
   async function kasitteleSijaintiPyynto() {
     setSijaintiTila("haetaan");
@@ -38,15 +42,18 @@ export function Etusivu() {
     setMuistiinpano("");
     setSijainti(null);
     setSijaintiTila("idle");
-    setTulos(null);
+    setNopeaTulos(null);
+    setTaydellinenTulos(null);
+    setNaytettava("nopea");
     setVirhe(null);
   }
 
-  async function kasitteleLahetys(tila: "nopea" | "taydellinen") {
+  async function lahetaNopea(e: FormEvent) {
+    e.preventDefault();
     const siistiTekija = tekija.trim();
     if (!tiedosto || !siistiTekija) return;
 
-    setLahetetaan(tila);
+    setLahetetaan("nopea");
     setVirhe(null);
     try {
       const pakattu = await pakkaaKuva(tiedosto, KUVA_MAX_TAVUA);
@@ -56,10 +63,11 @@ export function Etusivu() {
         lat: sijainti?.lat ?? null,
         lng: sijainti?.lng ?? null,
         kuva: pakattu,
-        tila,
+        tila: "nopea",
       });
       tallennaTekijanNimi(siistiTekija);
-      setTulos(vastaus);
+      setNopeaTulos(vastaus);
+      setNaytettava("nopea");
     } catch (virhe) {
       setVirhe(virhe instanceof Error ? virhe.message : "Analyysi epäonnistui");
     } finally {
@@ -67,26 +75,81 @@ export function Etusivu() {
     }
   }
 
-  function lahetaLomake(e: FormEvent) {
-    // Lomakkeella ei ole yhtä oletuslähetystapaa — käyttäjä valitsee
-    // nopean tai täydellisen analyysin napista (ks. kasitteleLahetys).
-    e.preventDefault();
+  async function teeTaydellinen() {
+    if (!nopeaTulos) return;
+    if (taydellinenTulos) {
+      setNaytettava("taydellinen");
+      return;
+    }
+
+    setLahetetaan("taydellinen");
+    setVirhe(null);
+    try {
+      const vastaus = await analysoiTaydellisesti(nopeaTulos.id, nopeaTulos.tekija);
+      setTaydellinenTulos(vastaus);
+      setNaytettava("taydellinen");
+    } catch (virhe) {
+      setVirhe(virhe instanceof Error ? virhe.message : "Täydellinen analyysi epäonnistui");
+    } finally {
+      setLahetetaan(null);
+    }
   }
 
-  if (tulos) {
+  if (nopeaTulos) {
+    const tulos = naytettava === "taydellinen" && taydellinenTulos ? taydellinenTulos : nopeaTulos;
+    const onTaydellinen = tulos === taydellinenTulos;
+
     return (
       <div className="tulos-kortti">
-        <h2>Havaitut rakennusvirheet</h2>
-        <EhdotusLista kuvaId={tulos.id} havainto={tulos.havainto} ehdotukset={tulos.ehdotukset} />
-        <button type="button" className="nappi nappi-ensisijainen" onClick={aloitaAlusta}>
-          Analysoi uusi kuva
-        </button>
+        <h2>{onTaydellinen ? "Täydellinen analyysi" : "Nopea analyysi"}</h2>
+        <EhdotusLista
+          key={tulos.id}
+          kuvaId={tulos.id}
+          havainto={tulos.havainto}
+          ehdotukset={tulos.ehdotukset}
+        />
+
+        {virhe && (
+          <p className="lomake-virhe" role="alert">
+            {virhe}
+          </p>
+        )}
+
+        <div className="analyysi-lahetys-napit">
+          {onTaydellinen ? (
+            <button type="button" className="nappi nappi-toissijainen" onClick={() => setNaytettava("nopea")}>
+              Takaisin nopeaan analyysiin
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="nappi nappi-ensisijainen"
+              onClick={teeTaydellinen}
+              disabled={lahetetaan !== null}
+              title="Tarkistaa ja täydentää nopean analyysin: lukee tarvittaessa myös RT-korttien sisällön. Voi kestää noin minuutin."
+            >
+              {lahetetaan === "taydellinen"
+                ? "Analysoidaan tarkemmin… (voi kestää noin minuutin)"
+                : taydellinenTulos
+                  ? "Näytä täydellinen analyysi"
+                  : "Täydellinen analyysi"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="nappi nappi-toissijainen"
+            onClick={aloitaAlusta}
+            disabled={lahetetaan !== null}
+          >
+            Analysoi uusi kuva
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <form className="analyysi-lomake-kontti" onSubmit={lahetaLomake}>
+    <form className="analyysi-lomake-kontti" onSubmit={lahetaNopea}>
       <h2>Kuvaa remonttikohde</h2>
       <p className="analyysi-ohje">
         Ota kuva remontti- tai rakennuskohteesta, niin sovellus etsii siitä mahdollisia
@@ -143,26 +206,13 @@ export function Etusivu() {
         </p>
       )}
 
-      <div className="analyysi-lahetys-napit">
-        <button
-          className="nappi nappi-toissijainen"
-          type="button"
-          onClick={() => kasitteleLahetys("nopea")}
-          disabled={!tiedosto || !tekija.trim() || lahetetaan !== null}
-          title="Nopea: käyttää vain RT-korttihakemiston tunnus- ja nimihakua, vastaus muutamassa sekunnissa."
-        >
-          {lahetetaan === "nopea" ? "Analysoidaan nopeasti…" : "Nopea analyysi"}
-        </button>
-        <button
-          className="nappi nappi-ensisijainen"
-          type="button"
-          onClick={() => kasitteleLahetys("taydellinen")}
-          disabled={!tiedosto || !tekija.trim() || lahetetaan !== null}
-          title="Täydellinen: lukee tarvittaessa myös koko RT-kortin sisällön, tarkempi mutta voi kestää jopa ~30 sekuntia."
-        >
-          {lahetetaan === "taydellinen" ? "Analysoidaan…" : "Täydellinen analyysi"}
-        </button>
-      </div>
+      <button
+        className="nappi nappi-ensisijainen"
+        type="submit"
+        disabled={!tiedosto || !tekija.trim() || lahetetaan !== null}
+      >
+        {lahetetaan === "nopea" ? "Analysoidaan…" : "Analysoi"}
+      </button>
     </form>
   );
 }

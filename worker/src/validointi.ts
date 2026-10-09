@@ -10,8 +10,14 @@ export interface AnalysoiPyynto {
   muistiinpano: string | null;
   lat: number | null;
   lng: number | null;
-  kuva: KuvaKentta;
+  /** null kun pohjaAnalyysiId on annettu — kuva luetaan silloin pohja-analyysin tallenteesta. */
+  kuva: KuvaKentta | null;
   tila: AnalyysiTila;
+  /**
+   * Aiemman (nopean) analyysin id, jonka kuvasta ja tuloksista täydellinen
+   * analyysi tehdään. Silloin muistiinpano ja sijainti otetaan pohja-analyysista.
+   */
+  pohjaAnalyysiId: string | null;
 }
 
 export type AnalysoiValidointiTulos =
@@ -19,6 +25,7 @@ export type AnalysoiValidointiTulos =
   | { ok: false; virhe: string };
 
 const TEKIJA_MAX_PITUUS = 50;
+const ANALYYSI_ID_MAX_PITUUS = 64;
 const MUISTIINPANO_MAX_PITUUS = 500;
 // SVG/GIF eivät kelpaa Anthropic-API:n kuvasyötteeksi, joten niitä ei
 // hyväksytä tässä vaikka worker/r2.ts:n paattelSisaltotyyppi tunnistaisi ne.
@@ -230,7 +237,7 @@ export function validoiAnalysoiPyynto(data: unknown): AnalysoiValidointiTulos {
     return { ok: false, virhe: "Pyyntö täytyy olla JSON-objekti" };
   }
 
-  const { tekija, muistiinpano, lat, lng, kuva, tila } = data as Record<string, unknown>;
+  const { tekija, muistiinpano, lat, lng, kuva, tila, pohjaAnalyysiId } = data as Record<string, unknown>;
 
   if (typeof tekija !== "string" || tekija.trim().length === 0) {
     return { ok: false, virhe: "tekija on pakollinen" };
@@ -254,11 +261,36 @@ export function validoiAnalysoiPyynto(data: unknown): AnalysoiValidointiTulos {
   const sijaintiTulos = validoiSijainti(lat, lng);
   if (!sijaintiTulos.ok) return sijaintiTulos;
 
-  const kuvaTulos = validoiKuvaKentta(kuva);
-  if (!kuvaTulos.ok) return kuvaTulos;
-
   const tilaTulos = validoiTila(tila);
   if (!tilaTulos.ok) return tilaTulos;
+
+  if (pohjaAnalyysiId !== undefined && pohjaAnalyysiId !== null) {
+    if (
+      typeof pohjaAnalyysiId !== "string" ||
+      pohjaAnalyysiId.trim().length === 0 ||
+      pohjaAnalyysiId.length > ANALYYSI_ID_MAX_PITUUS
+    ) {
+      return { ok: false, virhe: "pohjaAnalyysiId täytyy olla analyysin id" };
+    }
+    if (tilaTulos.tila !== "taydellinen") {
+      return { ok: false, virhe: 'pohjaAnalyysiId:n kanssa tila täytyy olla "taydellinen"' };
+    }
+    return {
+      ok: true,
+      pyynto: {
+        tekija: tekija.trim(),
+        muistiinpano: null,
+        lat: null,
+        lng: null,
+        kuva: null,
+        tila: "taydellinen",
+        pohjaAnalyysiId: pohjaAnalyysiId.trim(),
+      },
+    };
+  }
+
+  const kuvaTulos = validoiKuvaKentta(kuva);
+  if (!kuvaTulos.ok) return kuvaTulos;
 
   return {
     ok: true,
@@ -269,6 +301,7 @@ export function validoiAnalysoiPyynto(data: unknown): AnalysoiValidointiTulos {
       lng: sijaintiTulos.lng,
       kuva: kuvaTulos.kuva,
       tila: tilaTulos.tila,
+      pohjaAnalyysiId: null,
     },
   };
 }

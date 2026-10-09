@@ -13,8 +13,9 @@ import {
   lisaaReklamaatio,
   haeReklamaatio,
 } from "./d1.js";
-import type { PalauteArvio } from "./d1.js";
+import type { Kuva, PalauteArvio } from "./d1.js";
 import { haeKuva, tallennaKuva, haeRtPdf, tallennaRtPdf } from "./r2.js";
+import { bytesToBase64 } from "./base64.js";
 import { validoiAnalysoiPyynto, validoiPalautePyynto, validoiReklamaatioPyynto } from "./validointi.js";
 import { kirjoitaReklamaatio } from "./reklamaatio.js";
 import { analysoiRemontti } from "./rtAnalyysi.js";
@@ -142,6 +143,26 @@ async function kasitteleAnalysoi(
 
   const { pyynto } = tulos;
 
+  // Täydellinen analyysi nopean jatkoksi: kuva, lisätieto ja sijainti luetaan
+  // pohja-analyysista eikä kuvaa ladata eikä tallenneta uudelleen.
+  let pohja: Kuva | null = null;
+  let kuvaSyote = pyynto.kuva;
+  if (pyynto.pohjaAnalyysiId) {
+    pohja = await haeKuvaIdlla(env.DB, pyynto.pohjaAnalyysiId);
+    const objekti = pohja ? await haeKuva(env.KUVAT, pohja.tiedostonimi) : null;
+    if (!pohja || !objekti) {
+      return jsonVastaus({ error: "Pohja-analyysia ei löydy" }, 404, corsHeaders);
+    }
+    kuvaSyote = {
+      data: bytesToBase64(new Uint8Array(await objekti.arrayBuffer())),
+      tiedostopaate: pohja.tiedostonimi.split(".").pop() ?? "jpg",
+    };
+  }
+  if (!kuvaSyote) {
+    return jsonVastaus({ error: "kuva on pakollinen" }, 400, corsHeaders);
+  }
+  const muistiinpano = pohja ? pohja.muistiinpano : pyynto.muistiinpano;
+
   const tyokalut: RtAnalyysiTyokalut = {
     haeHakemistosta: (hakusana) => hakemistohaku(env.DB, hakusana),
     haeKortinTiivistelma: async (tunnus) => {
@@ -157,7 +178,14 @@ async function kasitteleAnalysoi(
 
   let analyysi;
   try {
-    analyysi = await analysoiRemontti(env.ANTHROPIC_API_KEY, pyynto.kuva, pyynto.muistiinpano, tyokalut, pyynto.tila);
+    analyysi = await analysoiRemontti(
+      env.ANTHROPIC_API_KEY,
+      kuvaSyote,
+      muistiinpano,
+      tyokalut,
+      pyynto.tila,
+      pohja ? { havainto: pohja.havainto, ehdotukset: pohja.ehdotukset } : null,
+    );
   } catch (virhe) {
     console.error(virhe);
     return jsonVastaus({ error: "RT-analyysi epäonnistui. Yritä uudelleen." }, 502, corsHeaders);
@@ -166,17 +194,18 @@ async function kasitteleAnalysoi(
   analyysi = { ...analyysi, ehdotukset: await varmistaRtKortit(env.DB, analyysi.ehdotukset) };
 
   const id = crypto.randomUUID();
-  const tiedostonimi = `${id}.${pyynto.kuva.tiedostopaate}`;
+  // Uusi rivi viittaa samaan R2-kuvaan kuin pohja-analyysi.
+  const tiedostonimi = pohja ? pohja.tiedostonimi : `${id}.${kuvaSyote.tiedostopaate}`;
 
   try {
-    await tallennaKuva(env.KUVAT, tiedostonimi, pyynto.kuva.data);
+    if (!pohja) await tallennaKuva(env.KUVAT, tiedostonimi, kuvaSyote.data);
     const kuva = await lisaaKuva(env.DB, {
       id,
       tekija: pyynto.tekija,
       tiedostonimi,
-      muistiinpano: pyynto.muistiinpano,
-      lat: pyynto.lat,
-      lng: pyynto.lng,
+      muistiinpano,
+      lat: pohja ? pohja.lat : pyynto.lat,
+      lng: pohja ? pohja.lng : pyynto.lng,
       havainto: analyysi.havainto,
       ehdotukset: analyysi.ehdotukset,
       tila: pyynto.tila,

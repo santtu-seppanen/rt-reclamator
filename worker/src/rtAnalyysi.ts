@@ -322,11 +322,20 @@ export async function analysoiRemontti(
   muistiinpano: string | null,
   tyokalut: RtAnalyysiTyokalut,
   tila: AnalyysiTila,
+  aiempiAnalyysi: RtAnalyysi | null = null,
 ): Promise<RtAnalyysi> {
   const mediaType = paattelSisaltotyyppi(kuva.tiedostopaate);
-  const kayttajaTeksti = muistiinpano
+  let kayttajaTeksti = muistiinpano
     ? `Käyttäjän lisätieto kuvasta: ${muistiinpano}`
     : "Käyttäjä ei antanut lisätietoa kuvasta.";
+  if (aiempiAnalyysi) {
+    // Täydellinen analyysi nopean jatkoksi: nopea tulos on lähtökohta, ei totuus.
+    kayttajaTeksti +=
+      "\n\nKuvasta on jo tehty nopea alustava analyysi (alla). Käytä sitä lähtökohtana: " +
+      "tarkista sen havainnot ja RT-kortit, korjaa virheelliset, täydennä puuttuvat ja " +
+      "pudota ne joita kuva ei tue. Älä kopioi sitä sellaisenaan.\n" +
+      JSON.stringify(aiempiAnalyysi);
+  }
 
   const messages: unknown[] = [
     {
