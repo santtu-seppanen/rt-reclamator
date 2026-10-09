@@ -12,8 +12,8 @@ const TYOKALU_NIMI = "kirjaa_reklamaatio";
 // hakasulkeisiin paikkamerkeiksi eikä niitä keksitä.
 const SYSTEEMIKEHOTE = `Olet rakennusalan asiantuntija-avustaja, joka kirjoittaa \
 suomenkielisen reklamaatioluonnoksen rakennus- tai remonttivirheestä. Saat kuva-analyysin \
-havainnon, käyttäjän valitsemat virhe-ehdotukset (aihe, kuvaus, RT-kortti, lakipykälä, \
-varmuus) sekä käyttäjän mahdolliset lisätiedot.
+havainnon, käyttäjän valitsemat virhe-ehdotukset (aihe, kuvaus, tarkastustapa, RT-kortti, \
+lakipykälä, varmuus) sekä käyttäjän mahdolliset lisätiedot.
 
 Kirjoita asiallinen, kohtelias mutta selkeä reklamaatio urakoitsijalle tai myyjälle:
 - Otsikkorivi (esim. "Reklamaatio: ...").
@@ -26,7 +26,8 @@ sopimusnumeroita tai summia.
 Älä lisää muita RT-kortteja tai pykäliä. Jos ehdotuksessa ei ole RT-korttia tai \
 lakipykälää, älä keksi sellaista — kuvaa vaatimus sanallisesti. Jos ehdotuksen varmuus \
 on "matala", muotoile kohta varauksellisesti (esim. "vaikuttaa siltä", "pyydämme \
-selvittämään").
+selvittämään") ja pyydä selvittämään asia ehdotuksen tarkastustavalla, jos sellainen on \
+annettu.
 - Vaatimus: virheiden korjaaminen kohtuullisessa määräajassa [määräaika] ja \
 kirjallinen vastaus.
 - Lopuksi yhteystiedot ja allekirjoitus paikkamerkkeinä.
@@ -54,6 +55,7 @@ function muotoileSyote(syote: ReklamaatioSyote): string {
       const rivit = [
         `${i + 1}. ${e.aihe}`,
         `   Kuvaus: ${e.kuvaus}`,
+        `   Tarkastustapa: ${e.tarkastus ?? "(ei)"}`,
         `   RT-kortti: ${e.rtKortti ?? "(ei)"}`,
         `   Lakipykälä: ${e.lakipykala ?? "(ei)"}`,
         `   Varmuus: ${e.varmuus}`,

@@ -38,6 +38,11 @@ mihin kannattaa lähteä vetoamaan kuvassa näkyvän virheen perusteella.
   (~20-25 s), koska Anthropic ei voi kutsua työkalua jota ei ole
   `tools`-listassa — "taydellinen" tarjoaa molemmat ja kestää ~40-60 s. Molemmissa RT-korttitunnus on silti aina joko
   oikea tai tyhjä (ks. alla).
+- Jokaisella ehdotuksella on `tarkastus`-kenttä: miten epäily varmistetaan
+  paikan päällä (menetelmät, välineet, tulkinta, tekijä). Riskikohdat, joita
+  ei voi varmentaa pelkästä kuvasta, kirjataan omiksi ehdotuksikseen eikä
+  havaintoon. Reklamaatioluonnos pyytää matalan varmuuden kohdissa
+  selvittämään asian tällä tarkastustavalla.
 - **Ehdotukset (`POST /analysoi`) ovat tekoälyn arvioita kuvasta, eivät
   lakineuvontaa.** Mallilla ei ole lakimieskoulutusta — se antaa tarkan
   lakipykälän vain jos se on siitä kohtuullisen varma, muuten pelkän

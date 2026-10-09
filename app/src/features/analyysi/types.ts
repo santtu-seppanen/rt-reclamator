@@ -16,6 +16,8 @@ export interface RtEhdotus {
   rtKorttiTiedot?: RtKorttiTiedot | null;
   lakipykala: string | null;
   kuvaus: string;
+  /** Miten epäily varmistetaan paikan päällä. Puuttuu vanhoilta analyyseilta. */
+  tarkastus?: string | null;
   varmuus: Varmuus;
 }
 

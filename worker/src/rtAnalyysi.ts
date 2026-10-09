@@ -15,6 +15,8 @@ export interface RtEhdotus {
   rtKorttiTiedot?: RtKorttiTiedot | null;
   lakipykala: string | null;
   kuvaus: string;
+  /** Miten epäily varmistetaan paikan päällä. Puuttuu vanhoilta analyyseilta. */
+  tarkastus?: string | null;
   varmuus: "korkea" | "keskitaso" | "matala";
 }
 
@@ -96,10 +98,19 @@ Kun olet valmis, kutsu AINA lopuksi ${TYOKALU_NIMI}-työkalua näin:
 - havainto: 1-2 lauseen kuvaus siitä, mitä kuvassa näkyy ja näkyykö siinä merkkejä \
 rakennusvirheestä. Jos et näe mitään virheeseen viittaavaa, kerro se rehellisesti.
 - ehdotukset: 0-6 havaittua virhettä tai epäilyä virheestä. Jos et löydä yhtään \
-uskottavaa virhettä, palauta tyhjä lista äläkä keksi ongelmia vain täyttääksesi listaa.
-  - aihe: lyhyt kuvaus havaitusta virheestä.
-  - kuvaus: tarkempi selitys siitä, miksi tämä on todennäköisesti virhe ja mitä \
-seurauksia siitä voi olla.
+uskottavaa virhettä, palauta tyhjä lista äläkä keksi ongelmia vain täyttääksesi listaa. \
+Kirjaa myös jokainen riskikohta, jota ei voi varmentaa pelkästä valokuvasta, omaksi \
+ehdotuksekseen (matalalla varmuudella) — älä niputa niitä havainto-kenttään yleisellä \
+maininnalla.
+  - aihe: lyhyt kuvaus havaitusta virheestä tai riskikohdasta.
+  - kuvaus: tarkempi selitys: mikä kuvassa tarkalleen herättää epäilyn, mitä kuvasta \
+ei voi nähdä tai varmistaa, miksi se olisi virhe ja mitä seurauksia siitä voi olla.
+  - tarkastus: miten epäily varmistetaan paikan päällä. Anna konkreettiset \
+tarkastusmenetelmät ja -välineet (esim. pintakosteus- tai porareikämittaus, \
+lämpökamera, vesikoe, rakenneavaus, mittaus vesivaa'alla tai rullamitalla, \
+valmistajan asennusohjeen tai tuotehyväksynnän tarkistus, tarkastusasiakirjan tai \
+käyttöönottopöytäkirjan pyytäminen), mikä tulos viittaa virheeseen ja kuka \
+tarkastuksen voi tehdä (käyttäjä itse, kuntotarkastaja, sähkö- tai LVI-urakoitsija tms.).
   - rtKortti: tarkka, hakemistohaulla vahvistettu RT-korttitunnus ja mahdollinen \
 kohta (esim. "RT 84-11093, kohta 3.2"), tai tyhjä merkkijono ("") jos et löytänyt \
 vahvistettua osumaa.
@@ -133,7 +144,7 @@ interface AnthropicVastaus {
 
 function siivoaEhdotus(raaka: unknown): RtEhdotus | null {
   if (typeof raaka !== "object" || raaka === null) return null;
-  const { aihe, rtKortti, lakipykala, kuvaus, varmuus } = raaka as Record<string, unknown>;
+  const { aihe, rtKortti, lakipykala, kuvaus, tarkastus, varmuus } = raaka as Record<string, unknown>;
 
   if (typeof aihe !== "string" || aihe.trim().length === 0) return null;
   if (typeof kuvaus !== "string" || kuvaus.trim().length === 0) return null;
@@ -156,6 +167,7 @@ function siivoaEhdotus(raaka: unknown): RtEhdotus | null {
     rtKortti: siistiRtKortti,
     lakipykala: siistiLakipykala,
     kuvaus: kuvaus.trim(),
+    tarkastus: typeof tarkastus === "string" && tarkastus.trim().length > 0 ? tarkastus.trim() : null,
     varmuus: siistiVarmuus,
   };
 }
@@ -185,9 +197,13 @@ const TYOKALU_KIRJAA = {
                 description: "Tarkka laki ja pykälä, tai tyhjä merkkijono jos ei varmuutta.",
               },
               kuvaus: { type: "string" },
+              tarkastus: {
+                type: "string",
+                description: "Miten epäily varmistetaan paikan päällä: menetelmät, välineet, tulkinta ja tekijä.",
+              },
               varmuus: { type: "string", enum: ["korkea", "keskitaso", "matala"] },
             },
-            required: ["aihe", "rtKortti", "lakipykala", "kuvaus", "varmuus"],
+            required: ["aihe", "rtKortti", "lakipykala", "kuvaus", "tarkastus", "varmuus"],
             additionalProperties: false,
           },
         },

@@ -97,6 +97,12 @@ export function EhdotusLista({ kuvaId, havainto, ehdotukset }: EhdotusListaProps
                 <span className="ehdotus-aihe">{ehdotus.aihe}</span>
               </div>
               <p className="ehdotus-kuvaus">{ehdotus.kuvaus}</p>
+              {ehdotus.tarkastus && (
+                <div className="ehdotus-tarkastus">
+                  <span className="ehdotus-tarkastus-otsikko">Miten tarkistaa</span>
+                  <p>{ehdotus.tarkastus}</p>
+                </div>
+              )}
               <div className="ehdotus-viitteet">
                 {ehdotus.rtKortti && (
                   <span className="ehdotus-koodi">RT-kortti: {ehdotus.rtKortti}</span>
